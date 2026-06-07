@@ -24,8 +24,9 @@ export function createMemoryRouteStore(seed: RouteBundle[] = []): RouteStore {
     async publish(id: string): Promise<void> {
       const found = map.get(id);
       if (!found) throw new Error(`route ${id} not found`);
-      found.route.status = 'published';
-      map.set(id, found);
+      const updated = structuredClone(found);
+      updated.route.status = 'published';
+      map.set(id, updated);
     },
   };
 }

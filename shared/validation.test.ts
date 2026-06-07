@@ -68,4 +68,11 @@ describe('validateRouteBundle', () => {
     const codes = validateRouteBundle(b, reg).map((e) => e.code);
     expect(codes).toContain('NO_REACHABLE_ENDING');
   });
+
+  it('NO_REACHABLE_ENDING when there are no endings at all', () => {
+    const b = clone();
+    b.route.endings = [];
+    const codes = validateRouteBundle(b, reg).map((e) => e.code);
+    expect(codes).toContain('NO_REACHABLE_ENDING');
+  });
 });

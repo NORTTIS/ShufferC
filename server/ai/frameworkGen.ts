@@ -59,6 +59,7 @@ export async function generateFramework(
     }
 
     bundle.route.status = 'draft';
+    bundle.route.sourceNovelId = params.sourceNovelId ?? 'adhoc';
     return { ok: true, bundle, attempts };
   }
 

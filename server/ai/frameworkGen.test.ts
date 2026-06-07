@@ -21,6 +21,7 @@ describe('generateFramework', () => {
     if (res.ok) {
       expect(res.attempts).toBe(1);
       expect(res.bundle.route.status).toBe('draft');
+      expect(res.bundle.route.sourceNovelId).toBe('adhoc');
     }
   });
 
