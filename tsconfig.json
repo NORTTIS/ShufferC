@@ -9,5 +9,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["jest", "node"]
   },
-  "include": ["shared"]
+  "include": ["shared", "server"]
 }
