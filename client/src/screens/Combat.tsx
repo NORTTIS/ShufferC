@@ -26,13 +26,14 @@ export function Combat({
   const log = lastChoice?.combat?.log ?? [];
   const [shown, setShown] = useState(0);
   useEffect(() => {
-    if (log.length === 0) { setShown(0); return; }
+    const events = lastChoice?.combat?.log ?? [];
+    if (events.length === 0) { setShown(0); return; }
     setShown(0);
+    let n = 0;
     const timer = setInterval(() => {
-      setShown((n) => {
-        if (n >= log.length) { clearInterval(timer); return n; }
-        return n + 1;
-      });
+      n += 1;
+      setShown(n);
+      if (n >= events.length) clearInterval(timer);
     }, 600);
     return () => clearInterval(timer);
   }, [lastChoice]);

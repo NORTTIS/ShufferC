@@ -11,6 +11,6 @@
     "types": ["react", "node"],
     "noEmit": true
   },
-  "include": ["src", "App.tsx", "index.ts", "../shared/types.ts"],
+  "include": ["src", "App.tsx", "index.ts", "../shared/types.ts", "../shared/backgrounds.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

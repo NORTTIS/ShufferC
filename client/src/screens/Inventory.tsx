@@ -22,14 +22,17 @@ export function Inventory({
       </Text>
 
       <Text style={styles.section}>Equipped</Text>
-      {Object.entries(equipped).map(([slot, id]) => (
-        <View key={slot} style={styles.row}>
-          <Text style={styles.item}>{slot}: {sprite('item.' + (id ?? ''))} {id}</Text>
-          <Pressable disabled={busy} onPress={() => onEquip(slot, null)}>
-            <Text style={styles.unequip}>unequip</Text>
-          </Pressable>
-        </View>
-      ))}
+      {Object.entries(equipped).map(([slot, id]) => {
+        if (!id) return null;
+        return (
+          <View key={slot} style={styles.row}>
+            <Text style={styles.item}>{slot}: {sprite('item.' + id)} {id}</Text>
+            <Pressable disabled={busy} onPress={() => onEquip(slot, null)}>
+              <Text style={styles.unequip}>unequip</Text>
+            </Pressable>
+          </View>
+        );
+      })}
 
       <Text style={styles.section}>Inventory</Text>
       {view.save.character.inventory.map((id) => (
