@@ -12,6 +12,9 @@ import { resolveChoice } from '../shared/engine/story';
 import { mulberry32 } from '../shared/engine/dice';
 import { SaveStore } from './store/SaveStore';
 
+// Fixed starting seed: the vertical slice is intentionally deterministic so the
+// client can replay the combat log and match the server exactly (acceptance #6).
+// A later sub-project will randomise the seed per session.
 const START_SEED = 7;
 
 export class GameError extends Error {
@@ -61,6 +64,9 @@ export interface GameSession {
 }
 
 export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_DEPS): GameSession {
+  // Slice simplification (spec §4.3): endings are matched by a simple
+  // `currentNodeId === <id>` condition string. Richer ending conditions are
+  // sub-project E. A non-matching/different condition format simply yields no ending.
   function computeEnding(save: SaveState): string | undefined {
     for (const e of deps.route.endings) {
       const m = e.condition.match(/currentNodeId === (\w+)/);
@@ -121,6 +127,9 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       const choice = node.choices.find((c) => c.id === choiceId);
       if (!choice) throw new GameError(`Choice ${choiceId} not in node ${node.id}`, 400);
 
+      // Choice dispatch (spec §4.2): a skill-check choice resolves as a check;
+      // otherwise, if the node has combat, the choice is a "fight". The slice's
+      // route never gives a single choice BOTH a skillCheck and node combat.
       // Path 1: skill-check choice (e.g. "sneak")
       if (choice.skillCheck) {
         const res = resolveChoice(save, node, choiceId, mulberry32(save.seed));
@@ -180,7 +189,8 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         save.character.equipped[slot as EquipSlot] = itemId;
       }
       await store.put(id, save);
-      return { save, effectiveStats: effectiveStats(save.character, deps.itemDb) };
+      const stored = structuredClone(save);
+      return { save: stored, effectiveStats: effectiveStats(stored.character, deps.itemDb) };
     },
   };
 }

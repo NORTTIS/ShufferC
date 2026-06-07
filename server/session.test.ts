@@ -66,6 +66,9 @@ describe('GameSession.equip', () => {
     await expect(s.equip(sessionId, 'ring', 'dagger')).rejects.toMatchObject({ status: 400 });
   });
 
+});
+
+describe('GameSession.listBackgrounds', () => {
   it('lists all backgrounds', () => {
     const s = newSession();
     expect(s.listBackgrounds().map((b) => b.id).sort()).toEqual(['fighter', 'mage', 'rogue']);
