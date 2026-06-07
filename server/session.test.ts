@@ -1,7 +1,9 @@
 import { createGameSession, GameError } from './session';
 import { createMemoryStore } from './store/memoryStore';
+import { createMemoryRouteStore } from './store/memoryRouteStore';
 import { BACKGROUNDS } from '../shared/backgrounds';
-import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_NODES, SAMPLE_ROUTE } from '../shared/fixtures';
+import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE, SAMPLE_ROUTE } from '../shared/fixtures';
+import { RouteBundle } from '../shared/types';
 
 function newSession() {
   return createGameSession(createMemoryStore());
@@ -126,14 +128,13 @@ describe('GameSession.applyChoice — defeat path', () => {
   it('losing the fight returns ending "defeat" and does not advance the node', async () => {
     const deps = {
       backgrounds: BACKGROUNDS,
-      nodeDb: SAMPLE_NODES,
       itemDb: ITEM_DB,
       skillDb: SKILL_DB,
       enemyDb: {
         ...ENEMY_DB,
         goblin: { ...ENEMY_DB.goblin, stats: { ...ENEMY_DB.goblin.stats, str: 99 }, hp: 9999 },
       },
-      route: SAMPLE_ROUTE,
+      routes: createMemoryRouteStore([SAMPLE_BUNDLE]),
     };
     const s = createGameSession(createMemoryStore(), deps);
     const { sessionId } = await s.newGame('rogue');
@@ -144,5 +145,40 @@ describe('GameSession.applyChoice — defeat path', () => {
     // progress not persisted: a fresh view still sits at n1
     const again = await s.getView(sessionId);
     expect(again.save.currentNodeId).toBe('n1');
+  });
+});
+
+describe('GameSession.newGame — route selection', () => {
+  function depsWith(...bundles: RouteBundle[]) {
+    return {
+      backgrounds: BACKGROUNDS,
+      itemDb: ITEM_DB,
+      skillDb: SKILL_DB,
+      enemyDb: ENEMY_DB,
+      routes: createMemoryRouteStore(bundles),
+    };
+  }
+
+  it('starts a game on a second published route by id', async () => {
+    const second = structuredClone(SAMPLE_BUNDLE);
+    second.route.id = 'route-2';
+    second.route.title = 'Second Route';
+    const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE, second));
+    const res = await s.newGame('rogue', 'route-2');
+    expect(res.save.routeId).toBe('route-2');
+    expect(res.node.id).toBe('n1');
+  });
+
+  it('rejects newGame on a draft (unpublished) route with 409', async () => {
+    const draft = structuredClone(SAMPLE_BUNDLE);
+    draft.route.id = 'draft-route';
+    draft.route.status = 'draft';
+    const s = createGameSession(createMemoryStore(), depsWith(draft));
+    await expect(s.newGame('rogue', 'draft-route')).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('throws 404 when newGame targets a missing route', async () => {
+    const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE));
+    await expect(s.newGame('rogue', 'ghost-route')).rejects.toMatchObject({ status: 404 });
   });
 });
