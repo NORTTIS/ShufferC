@@ -1,5 +1,7 @@
 import { createGameSession, GameError } from './session';
 import { createMemoryStore } from './store/memoryStore';
+import { BACKGROUNDS } from '../shared/backgrounds';
+import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_NODES, SAMPLE_ROUTE } from '../shared/fixtures';
 
 function newSession() {
   return createGameSession(createMemoryStore());
@@ -114,5 +116,30 @@ describe('GameSession.applyChoice', () => {
     const s = newSession();
     const { sessionId } = await s.newGame('rogue');
     await expect(s.applyChoice(sessionId, 'nope')).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe('GameSession.applyChoice — defeat path', () => {
+  it('losing the fight returns ending "defeat" and does not advance the node', async () => {
+    const deps = {
+      backgrounds: BACKGROUNDS,
+      nodeDb: SAMPLE_NODES,
+      itemDb: ITEM_DB,
+      skillDb: SKILL_DB,
+      enemyDb: {
+        ...ENEMY_DB,
+        goblin: { ...ENEMY_DB.goblin, stats: { ...ENEMY_DB.goblin.stats, str: 99 }, hp: 9999 },
+      },
+      route: SAMPLE_ROUTE,
+    };
+    const s = createGameSession(createMemoryStore(), deps);
+    const { sessionId } = await s.newGame('rogue');
+    const res = await s.applyChoice(sessionId, 'fight', ['slash']);
+    expect(res.combat!.winner).toBe('enemies');
+    expect(res.ending).toBe('defeat');
+    expect(res.save.currentNodeId).toBe('n1'); // did NOT advance past the gate
+    // progress not persisted: a fresh view still sits at n1
+    const again = await s.getView(sessionId);
+    expect(again.save.currentNodeId).toBe('n1');
   });
 });
