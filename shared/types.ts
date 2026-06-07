@@ -135,3 +135,43 @@ export interface SaveState {
   currentNodeId: string;
   seed: number;
 }
+
+// ── Sub-project C (framework generation) ──────────────────────────────
+
+/** A route plus all of its nodes — the unit frameworkGen produces and RouteStore holds. */
+export interface RouteBundle {
+  route: GameRoute;                     // existing type; .status carries draft|published
+  nodes: Record<string, StoryNode>;     // existing StoryNode
+}
+
+/** Input to framework generation. */
+export interface GenerationParams {
+  contextText: string;                  // novel excerpt, plain text (no RAG yet)
+  title: string;                        // desired route title
+  nodeCount?: number;                   // target 3–6, default 4
+  sourceNovelId?: string;               // provenance tag, default 'adhoc'
+}
+
+/** Registries injected into the prompt + validator (fixtures now, DB later). */
+export interface Registries {
+  itemDb: Record<string, Item>;
+  skillDb: Record<string, Skill>;
+  enemyDb: Record<string, Enemy>;
+}
+
+export type ValidationCode =
+  | 'EMPTY_ROUTE'
+  | 'DANGLING_NODE_REF'
+  | 'UNKNOWN_ENEMY'
+  | 'UNKNOWN_ITEM_REF'
+  | 'BAD_SHAPE'
+  | 'UNREACHABLE_NODE'
+  | 'BAD_ENDING_CONDITION'
+  | 'NO_REACHABLE_ENDING';
+
+export interface ValidationError { path: string; code: ValidationCode; message: string; }
+
+/** frameworkGen result — discriminated union. */
+export type GenerationResult =
+  | { ok: true; bundle: RouteBundle; attempts: number }
+  | { ok: false; errors: ValidationError[]; attempts: number; lastRaw?: unknown };
