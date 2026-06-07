@@ -16,6 +16,17 @@ function wrap(handler: Handler) {
 
 export function createApp(session: GameSession): Express {
   const app = express();
+
+  // CORS: the Expo web client runs on a different origin (e.g. :8081) than the
+  // API (:3000). Allow cross-origin requests and answer preflight OPTIONS.
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    next();
+  });
+  app.options(/.*/, (_req: Request, res: Response) => res.sendStatus(204));
+
   app.use(express.json());
 
   app.get('/backgrounds', wrap(() => session.listBackgrounds()));

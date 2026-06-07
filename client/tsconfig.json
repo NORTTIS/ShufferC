@@ -7,10 +7,25 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "lib": ["ESNext", "DOM"],
-    "types": ["react", "node"],
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
+    "types": [
+      "react",
+      "node"
+    ],
     "noEmit": true
   },
-  "include": ["src", "App.tsx", "index.ts", "../shared/types.ts", "../shared/backgrounds.ts"],
-  "exclude": ["src/**/*.test.ts"]
+  "include": [
+    "src",
+    "App.tsx",
+    "index.ts",
+    "../shared/types.ts",
+    "../shared/backgrounds.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
+  ],
+  "extends": "expo/tsconfig.base"
 }
