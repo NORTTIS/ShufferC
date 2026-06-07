@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ShufferC Admin</title>
+  <style>
+    :root { --bg:#0f1117; --card:#1a1d27; --fg:#e6e8ee; --muted:#8a90a2; --accent:#5b8cff; --ok:#3fb950; --warn:#d29922; --err:#f85149; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+    header { padding:16px 24px; border-bottom:1px solid #2a2e3a; display:flex; justify-content:space-between; align-items:center; }
+    h1 { font-size:18px; margin:0; }
+    main { max-width:880px; margin:0 auto; padding:24px; }
+    .card { background:var(--card); border:1px solid #2a2e3a; border-radius:10px; padding:18px; margin-bottom:18px; }
+    label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+    input, textarea { width:100%; padding:9px 11px; background:#0c0e14; color:var(--fg); border:1px solid #2a2e3a; border-radius:6px; font:inherit; }
+    textarea { min-height:140px; resize:vertical; }
+    button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 16px; font:inherit; cursor:pointer; }
+    button.secondary { background:#2a2e3a; }
+    button:disabled { opacity:.5; cursor:default; }
+    table { width:100%; border-collapse:collapse; margin-top:8px; }
+    th, td { text-align:left; padding:8px 6px; border-bottom:1px solid #2a2e3a; font-size:14px; }
+    .status { font-size:13px; }
+    .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); }
+    pre { background:#0c0e14; padding:12px; border-radius:6px; overflow:auto; max-height:320px; font-size:12px; }
+    .hidden { display:none; }
+    .row { display:flex; gap:12px; }
+    .row > div { flex:1; }
+    .msg { margin-top:10px; font-size:13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ShufferC Admin</h1>
+    <button id="logout" class="secondary hidden">Log out</button>
+  </header>
+  <main>
+    <!-- Login -->
+    <section id="login" class="card">
+      <h2 style="margin-top:0;font-size:15px;">Log in</h2>
+      <label>Email</label>
+      <input id="email" type="email" autocomplete="username" />
+      <label>Password</label>
+      <input id="password" type="password" autocomplete="current-password" />
+      <div style="margin-top:14px;"><button id="loginBtn">Log in</button></div>
+      <div id="loginMsg" class="msg err"></div>
+    </section>
+
+    <!-- Console -->
+    <div id="console" class="hidden">
+      <section class="card">
+        <div id="status" class="status">Checking provider…</div>
+      </section>
+
+      <section class="card">
+        <h2 style="margin-top:0;font-size:15px;">Generate a route</h2>
+        <div class="row">
+          <div><label>Title</label><input id="title" placeholder="The Bridge" /></div>
+          <div><label>Node count</label><input id="nodeCount" type="number" value="4" min="3" max="8" /></div>
+        </div>
+        <label>Source text (novel excerpt)</label>
+        <textarea id="contextText" placeholder="Paste a few paragraphs of source material…"></textarea>
+        <div style="margin-top:14px;"><button id="genBtn">Generate</button></div>
+        <div id="genMsg" class="msg"></div>
+        <pre id="genOut" class="hidden"></pre>
+      </section>
+
+      <section class="card">
+        <h2 style="margin-top:0;font-size:15px;">Routes</h2>
+        <table>
+          <thead><tr><th>ID</th><th>Title</th><th>Status</th><th></th></tr></thead>
+          <tbody id="routesBody"></tbody>
+        </table>
+        <pre id="viewOut" class="hidden"></pre>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const TOKEN_KEY = 'shufferc_admin_token';
+    const $ = (id) => document.getElementById(id);
+    let token = localStorage.getItem(TOKEN_KEY) || '';
+
+    function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }; }
+
+    async function api(path, opts = {}) {
+      const res = await fetch(path, opts);
+      if (res.status === 401) { logout(); throw new Error('unauthorized'); }
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw Object.assign(new Error(body.error || ('HTTP ' + res.status)), { status: res.status, body });
+      return body;
+    }
+
+    function showConsole(on) {
+      $('login').classList.toggle('hidden', on);
+      $('console').classList.toggle('hidden', !on);
+      $('logout').classList.toggle('hidden', !on);
+    }
+
+    function logout() {
+      token = '';
+      localStorage.removeItem(TOKEN_KEY);
+      showConsole(false);
+    }
+
+    async function doLogin() {
+      $('loginMsg').textContent = '';
+      try {
+        const body = await api('/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: $('email').value, password: $('password').value }),
+        });
+        token = body.token;
+        localStorage.setItem(TOKEN_KEY, token);
+        showConsole(true);
+        await Promise.all([loadStatus(), loadRoutes()]);
+      } catch (e) {
+        $('loginMsg').textContent = e.status === 401 ? 'Invalid credentials.' : ('Login failed: ' + e.message);
+      }
+    }
+
+    async function loadStatus() {
+      const s = $('status');
+      try {
+        const body = await api('/admin/status', { headers: authHeaders() });
+        s.innerHTML = body.providerAvailable
+          ? 'Gemini provider: <span class="ok">available</span>'
+          : 'Gemini provider: <span class="warn">not configured</span> — set GEMINI_API_KEY in .env to enable generation.';
+      } catch (e) { s.innerHTML = '<span class="err">Status error: ' + e.message + '</span>'; }
+    }
+
+    async function loadRoutes() {
+      const tbody = $('routesBody');
+      tbody.innerHTML = '';
+      const rows = await api('/admin/routes', { headers: authHeaders() });
+      for (const r of rows) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + r.id + '</td><td>' + r.title + '</td><td>' + r.status + '</td>';
+        const td = document.createElement('td');
+        const view = document.createElement('button');
+        view.className = 'secondary'; view.textContent = 'View JSON';
+        view.onclick = () => viewRoute(r.id);
+        td.appendChild(view);
+        if (r.status !== 'published') {
+          const pub = document.createElement('button');
+          pub.textContent = 'Publish'; pub.style.marginLeft = '8px';
+          pub.onclick = () => publishRoute(r.id);
+          td.appendChild(pub);
+        }
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    }
+
+    async function viewRoute(id) {
+      const bundle = await api('/admin/routes/' + id, { headers: authHeaders() });
+      const out = $('viewOut'); out.classList.remove('hidden');
+      out.textContent = JSON.stringify(bundle, null, 2);
+    }
+
+    async function publishRoute(id) {
+      await fetch('/admin/routes/' + id + '/publish', { method: 'POST', headers: authHeaders() });
+      await loadRoutes();
+    }
+
+    async function doGenerate() {
+      const msg = $('genMsg'); const out = $('genOut');
+      msg.textContent = 'Generating…'; msg.className = 'msg'; out.classList.add('hidden');
+      $('genBtn').disabled = true;
+      try {
+        const body = await api('/admin/routes/generate', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            title: $('title').value,
+            nodeCount: Number($('nodeCount').value) || 4,
+            contextText: $('contextText').value,
+          }),
+        });
+        msg.className = 'msg ok';
+        msg.textContent = 'Created draft route: ' + body.routeId;
+        out.classList.remove('hidden');
+        out.textContent = JSON.stringify(body.bundle, null, 2);
+        await loadRoutes();
+      } catch (e) {
+        msg.className = 'msg err';
+        if (e.status === 422 && e.body && e.body.errors) {
+          msg.textContent = 'Generation failed after ' + e.body.attempts + ' attempts:';
+          out.classList.remove('hidden');
+          out.textContent = e.body.errors.map((x) => '[' + x.code + '] ' + x.path + ': ' + x.message).join('\n');
+        } else if (e.status === 503) {
+          msg.textContent = 'Provider unavailable — set GEMINI_API_KEY in .env and restart the server.';
+        } else {
+          msg.textContent = 'Error: ' + e.message;
+        }
+      } finally {
+        $('genBtn').disabled = false;
+      }
+    }
+
+    $('loginBtn').onclick = doLogin;
+    $('logout').onclick = logout;
+    $('genBtn').onclick = doGenerate;
+
+    // Boot: if we already hold a token, try the console; a stale token bounces back to login on the first 401.
+    if (token) { showConsole(true); loadStatus(); loadRoutes().catch(() => {}); }
+    else { showConsole(false); }
+  </script>
+</body>
+</html>
