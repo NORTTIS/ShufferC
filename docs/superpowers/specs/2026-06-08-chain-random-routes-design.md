@@ -29,14 +29,15 @@ across process restarts (store remains in-memory).
 
 ## Data model
 
-`shared/types.ts` — `SaveState` gains one field:
+`shared/types.ts` — `SaveState` gains one **optional** field:
 
 ```ts
-playedRouteIds: string[];   // route ids already consumed; never re-picked
+playedRouteIds?: string[];   // route ids already consumed; never re-picked
 ```
 
-`SAVE_VERSION` is **not** bumped — saves are in-memory only and always created
-via `newGame`, which sets the field. Read paths default with `?? []` defensively.
+Optional (not required) so the several test fixtures that build `SaveState`
+literals keep compiling. `newGame` always sets it; all read paths default with
+`?? []`. `SAVE_VERSION` is **not** bumped — saves are in-memory only.
 
 ## Server (`server/session.ts`)
 
