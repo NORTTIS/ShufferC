@@ -57,3 +57,14 @@ export type ParsedGenBundle = z.infer<typeof GenBundleSchema>;
 
 /** JSON Schema fed to Gemini's responseSchema so the model emits matching JSON. */
 export const GEN_BUNDLE_JSON_SCHEMA = z.toJSONSchema(GenBundleSchema) as object;
+
+// ── Live event-gen (slice C3): one node's enriched text ───────────────
+export const EventOverlaySchema = z.object({
+  prose: z.string().min(1),
+  choiceTexts: z.array(z.string().min(1)),
+});
+
+export type ParsedEventOverlay = z.infer<typeof EventOverlaySchema>;
+
+/** JSON Schema fed to Gemini's responseSchema for live event-gen. */
+export const EVENT_OVERLAY_JSON_SCHEMA = z.toJSONSchema(EventOverlaySchema) as object;
