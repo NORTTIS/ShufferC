@@ -6,6 +6,10 @@ import { RouteStore } from './store/RouteStore';
 import { Registries } from '../shared/types';
 import { generateFramework } from './ai/frameworkGen';
 import { Auth } from './auth';
+import { NovelStore, EmbeddingStore } from './rag/novelStore';
+import { EmbeddingProvider } from './rag/embeddingProvider';
+import { ingestNovel } from './rag/ingest';
+import { retrieveContext } from './rag/retrieve';
 
 type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
 
@@ -14,6 +18,9 @@ export interface AdminDeps {
   routes: RouteStore;
   registries: Registries;
   auth: Auth;
+  novels: NovelStore;
+  embeddings: EmbeddingStore;
+  embedder: EmbeddingProvider;
 }
 
 function wrap(handler: Handler) {
@@ -44,7 +51,7 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
   // API (:3000). Allow cross-origin requests and answer preflight OPTIONS.
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
     next();
   });
@@ -88,10 +95,47 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
 
   app.use('/admin/routes', requireAuth(admin.auth));
 
+  app.use('/admin/novels', requireAuth(admin.auth));
+
+  app.post('/admin/novels', wrap(async (req) => {
+    if (!admin.embedder.available) throw new GameError('Embedding provider unavailable', 503);
+    const { title, text } = req.body ?? {};
+    if (!title || !text) throw new GameError('title and text are required', 400);
+    return ingestNovel({ novels: admin.novels, embedder: admin.embedder }, { title, text });
+  }));
+
+  app.get('/admin/novels', wrap(() => admin.novels.list()));
+
+  app.get('/admin/novels/:id', wrap(async (req) => {
+    const novel = await admin.novels.get(req.params.id as string);
+    if (!novel) throw new GameError(`Novel ${req.params.id} not found`, 404);
+    return novel;
+  }));
+
+  app.delete('/admin/novels/:id', wrap(async (req, res) => {
+    await admin.novels.remove(req.params.id as string);
+    res.status(204).end();
+    return undefined;
+  }));
+
   app.post('/admin/routes/generate', wrap(async (req, res) => {
     if (!admin.provider.available) throw new GameError('AI provider unavailable', 503);
-    const { contextText, title, nodeCount } = req.body ?? {};
-    const result = await generateFramework(admin.provider, { contextText, title, nodeCount }, admin.registries);
+    const { novelId, query, contextText, title, nodeCount } = req.body ?? {};
+
+    let ctx: string = contextText ?? '';
+    if (novelId) {
+      if (!admin.embedder.available) throw new GameError('Embedding provider unavailable', 503);
+      ctx = await retrieveContext(
+        { embedder: admin.embedder, embeddings: admin.embeddings },
+        { query: query ?? title, novelId },
+      );
+    }
+
+    const result = await generateFramework(
+      admin.provider,
+      { contextText: ctx, title, nodeCount, sourceNovelId: novelId },
+      admin.registries,
+    );
     if (!result.ok) {
       res.status(422).json({ errors: result.errors, attempts: result.attempts });
       return undefined;

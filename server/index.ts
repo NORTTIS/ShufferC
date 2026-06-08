@@ -8,6 +8,8 @@ import { createAuth } from './auth';
 import { BACKGROUNDS } from '../shared/backgrounds';
 import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
 import { config } from './config';
+import { createMemoryNovelStore } from './rag/novelStore';
+import { createGeminiEmbedder, createFakeEmbedder } from './rag/embeddingProvider';
 
 // One RouteStore instance is shared between the player session (reads routes) and
 // the admin endpoints (write routes), so a freshly generated+published route is
@@ -22,11 +24,21 @@ const session = createGameSession(createMemoryStore(), {
   backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, routes,
 });
 
+// RAG: in-memory novel/embedding stores; Gemini embedder when a key is present
+// (available:false without a key → RAG endpoints report 503).
+const { novels, embeddings } = createMemoryNovelStore();
+const embedder = config.gemini.apiKey
+  ? createGeminiEmbedder(config.gemini)
+  : createFakeEmbedder();
+
 const app = createApp(session, {
   provider,
   routes,
   registries: { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB },
   auth: createAuth(config.admin),
+  novels,
+  embeddings,
+  embedder,
 });
 
 app.listen(config.port, () => {
