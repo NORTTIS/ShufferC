@@ -177,15 +177,15 @@ setNodeSource(routeId: string, nodeId: string, source: 'live' | 'pregen'): Promi
 ```
 Memory adapter mutates the cloned bundle; pg adapter updates the stored route JSON. (Routes are stored as a bundle/JSON blob today — the node lives inside it.)
 
-### 6.2 REST (`api.ts`) — unauthenticated for now (admin auth handled separately in D)
+### 6.2 REST (`api.ts`) — auth required (sits under the existing `app.use('/admin/routes', requireAuth)`)
 ```
-PATCH /admin/routes/:id/nodes/:nodeId/source
-      body { source: 'live' | 'pregen' }
+POST /admin/routes/:id/nodes/:nodeId/source
+     body { source: 'live' | 'pregen' }
       → 204            updated
       → 400            bad source value
       → 404            route or node not found
 ```
-Thin handler → `routes.setNodeSource(...)`. Intended for **draft** routes (set before publish); not blocked on published, but the console surfaces it in the draft-review flow.
+`POST` (not `PATCH`) to match the existing `publish` route and avoid touching the CORS `Allow-Methods` list. Thin handler → `routes.setNodeSource(...)`. Intended for **draft** routes (set before publish); not blocked on published, but the console surfaces it in the draft-review flow.
 
 ### 6.3 Admin console (`admin/index.html`) — required by the admin-endpoint⇒UI rule
 In the existing route-detail view, render each node with its id + current `source` and a **toggle button** ("Mark live" / "Mark pregen") that calls the endpoint via `api()`/`authHeaders()`, shows a success/error message, and refreshes the node list. Matches the existing card / `loadX()`/`doX()` / 401→logout / 503-400 messaging style.
