@@ -181,4 +181,35 @@ describe('GameSession.newGame — route selection', () => {
     const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE));
     await expect(s.newGame('rogue', 'ghost-route')).rejects.toMatchObject({ status: 404 });
   });
+
+  it('picks a random published route when no routeId is given', async () => {
+    const second = structuredClone(SAMPLE_BUNDLE);
+    second.route.id = 'route-2';
+    const deps = { ...depsWith(SAMPLE_BUNDLE, second), random: () => 0 };
+    const s = createGameSession(createMemoryStore(), deps);
+    const res = await s.newGame('rogue'); // no routeId
+    expect(res.save.routeId).toBe(SAMPLE_ROUTE.id); // index 0 of the published pool
+    expect(res.save.playedRouteIds).toEqual([SAMPLE_ROUTE.id]);
+  });
+
+  it('excludes draft routes from the random pool', async () => {
+    const draft = structuredClone(SAMPLE_BUNDLE);
+    draft.route.id = 'draft-route';
+    draft.route.status = 'draft';
+    const published = structuredClone(SAMPLE_BUNDLE);
+    published.route.id = 'pub-route';
+    // list order: [draft, published]; random()=0 must skip draft and pick pub-route
+    const deps = { ...depsWith(draft, published), random: () => 0 };
+    const s = createGameSession(createMemoryStore(), deps);
+    const res = await s.newGame('rogue');
+    expect(res.save.routeId).toBe('pub-route');
+  });
+
+  it('throws 409 when no published route exists and no routeId is given', async () => {
+    const draft = structuredClone(SAMPLE_BUNDLE);
+    draft.route.id = 'draft-route';
+    draft.route.status = 'draft';
+    const s = createGameSession(createMemoryStore(), depsWith(draft));
+    await expect(s.newGame('rogue')).rejects.toMatchObject({ status: 409 });
+  });
 });

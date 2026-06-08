@@ -3,7 +3,7 @@ import {
 } from '../shared/types';
 import { SAVE_VERSION, EQUIP_SLOTS } from '../shared/constants';
 import { Background, BACKGROUNDS } from '../shared/backgrounds';
-import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_ROUTE, SAMPLE_BUNDLE } from '../shared/fixtures';
+import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
 import { effectiveStats, buildPlayerActor, buildEnemyActor } from '../shared/engine/character';
 import { runCombat } from '../shared/engine/combat';
 import { resolveChoice } from '../shared/engine/story';
@@ -30,6 +30,7 @@ export interface SessionDeps {
   skillDb: Record<string, Skill>;
   enemyDb: Record<string, Enemy>;
   routes: RouteStore;
+  random?: () => number;
 }
 
 const DEFAULT_DEPS: SessionDeps = {
@@ -38,6 +39,7 @@ const DEFAULT_DEPS: SessionDeps = {
   skillDb: SKILL_DB,
   enemyDb: ENEMY_DB,
   routes: createMemoryRouteStore([SAMPLE_BUNDLE]),
+  random: Math.random,
 };
 
 export interface SessionView {
@@ -79,6 +81,16 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
     return bundle;
   }
 
+  const random = deps.random ?? Math.random;
+
+  // Pick a random published route id not already consumed; null if none remain.
+  async function pickRoute(played: string[]): Promise<string | null> {
+    const pool = (await deps.routes.list())
+      .filter((r) => r.status === 'published' && !played.includes(r.id));
+    if (pool.length === 0) return null;
+    return pool[Math.floor(random() * pool.length)].id;
+  }
+
   function view(save: SaveState, bundle: RouteBundle): SessionView {
     const node = bundle.nodes[save.currentNodeId];
     if (!node) throw new GameError(`Node ${save.currentNodeId} not found`, 500);
@@ -101,12 +113,20 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       return Object.values(deps.backgrounds);
     },
 
-    async newGame(backgroundId: string, routeId: string = SAMPLE_ROUTE.id) {
+    async newGame(backgroundId: string, routeId?: string) {
       const bg = deps.backgrounds[backgroundId];
       if (!bg) throw new GameError(`Unknown background ${backgroundId}`, 400);
-      const bundle = await loadBundle(routeId);
+
+      let resolvedRouteId = routeId;
+      if (!resolvedRouteId) {
+        const picked = await pickRoute([]);
+        if (!picked) throw new GameError('No published routes available', 409);
+        resolvedRouteId = picked;
+      }
+
+      const bundle = await loadBundle(resolvedRouteId);
       if (bundle.route.status !== 'published') {
-        throw new GameError(`Route ${routeId} is not published`, 409);
+        throw new GameError(`Route ${resolvedRouteId} is not published`, 409);
       }
       const startNodeId = bundle.route.acts[0].nodeIds[0];
       const save: SaveState = {
@@ -124,6 +144,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         choiceLog: [],
         currentNodeId: startNodeId,
         seed: START_SEED,
+        playedRouteIds: [bundle.route.id],
       };
       const sessionId = await store.create(save);
       return { sessionId, ...view(save, bundle) };
