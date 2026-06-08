@@ -5,6 +5,7 @@ export interface GeminiConfig {
   apiKey: string | null;
   proModel: string;
   flashModel: string;
+  embedModel: string;
 }
 
 // Gemini's responseSchema is a restricted OpenAPI subset, NOT full JSON Schema.
