@@ -282,4 +282,22 @@ describe('GameSession.applyChoice — hasNextRoute', () => {
     expect(res.ending).toBe('reach-keep');
     expect(res.hasNextRoute).toBe(false);
   });
+
+  it('treats a choiceless node with no matching ending as terminal and still reports hasNextRoute', async () => {
+    const deadEnd = structuredClone(SAMPLE_BUNDLE);
+    deadEnd.route.id = 'dead-end';
+    deadEnd.nodes.n1.choices = []; // terminal node; n1 matches no ending condition
+    const second = structuredClone(SAMPLE_BUNDLE);
+    second.route.id = 'route-2';
+    const deps = {
+      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      routes: createMemoryRouteStore([deadEnd, second]), random: () => 0,
+    };
+    const s = createGameSession(createMemoryStore(), deps);
+    const { sessionId } = await s.newGame('rogue', 'dead-end'); // starts at n1 (no choices, no ending)
+    const view = await s.getView(sessionId);
+    expect(view.ending).toBeUndefined();
+    expect(view.node.choices.length).toBe(0);
+    expect(view.hasNextRoute).toBe(true); // route-2 is still unplayed
+  });
 });

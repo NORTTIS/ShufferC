@@ -93,9 +93,12 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
     return pool[Math.floor(random() * pool.length)].id;
   }
 
-  // Annotate a view that ended (non-defeat) with whether a further route remains.
+  // Annotate a terminal view (non-defeat) with whether a further route remains.
+  // "Terminal" means the view has an ending OR the current node has no choices —
+  // the client routes to the ending screen in either case.
   async function withNextRoute<T extends SessionView>(v: T): Promise<T> {
-    if (v.ending && v.ending !== 'defeat') {
+    const isTerminal = v.ending !== undefined || v.node.choices.length === 0;
+    if (isTerminal && v.ending !== 'defeat') {
       const played = v.save.playedRouteIds ?? [v.save.routeId];
       v.hasNextRoute = (await pickRoute(played)) !== null;
     }
