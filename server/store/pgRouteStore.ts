@@ -34,5 +34,13 @@ export function createPgRouteStore(db: Db): RouteStore {
       bundle.route.status = 'published';
       await db.update(gameRoutes).set({ status: 'published', bundle }).where(eq(gameRoutes.id, id));
     },
+    async setNodeSource(routeId: string, nodeId: string, source: 'live' | 'pregen'): Promise<void> {
+      const rows = await db.select().from(gameRoutes).where(eq(gameRoutes.id, routeId));
+      if (!rows[0]) throw new Error(`route ${routeId} not found`);
+      const bundle = rows[0].bundle as RouteBundle;
+      if (!bundle.nodes[nodeId]) throw new Error(`node ${nodeId} not found in route ${routeId}`);
+      bundle.nodes[nodeId].source = source;
+      await db.update(gameRoutes).set({ bundle }).where(eq(gameRoutes.id, routeId));
+    },
   };
 }
