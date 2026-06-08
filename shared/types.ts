@@ -134,6 +134,7 @@ export interface SaveState {
   choiceLog: { nodeId: string; choiceId: string }[];
   currentNodeId: string;
   seed: number;
+  playedRouteIds?: string[];   // route ids already consumed; never re-picked
 }
 
 // ── Sub-project C (framework generation) ──────────────────────────────
