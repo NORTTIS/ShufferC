@@ -1,5 +1,6 @@
 import { RouteBundle, Registries, ValidationError } from './types';
 import { STAT_KEYS } from './constants';
+import { parseEndingCondition } from './endings';
 
 /**
  * Semantic/referential validation of a route bundle. Runs AFTER Zod shape-parse,
@@ -89,12 +90,11 @@ export function validateRouteBundle(b: RouteBundle, reg: Registries): Validation
   } else {
     let anyReachableTerminal = false;
     for (const e of route.endings) {
-      const m = e.condition.match(/^currentNodeId === (\w+)$/);
-      if (!m) {
-        errors.push({ path: `route.endings.${e.id}`, code: 'BAD_ENDING_CONDITION', message: `unsupported condition "${e.condition}"` });
+      const target = parseEndingCondition(e.condition);
+      if (!target) {
+        errors.push({ path: `route.endings.${e.id}`, code: 'BAD_ENDING_CONDITION', message: `unsupported condition "${e.condition}"; expected exactly: currentNodeId === <nodeId>` });
         continue;
       }
-      const target = m[1];
       const node = nodes[target];
       if (node && reached.has(target) && node.choices.length === 0) anyReachableTerminal = true;
     }

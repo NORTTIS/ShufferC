@@ -61,6 +61,15 @@ describe('validateRouteBundle', () => {
     expect(codes).toContain('BAD_ENDING_CONDITION');
   });
 
+  it('accepts a quoted node id in the ending condition (AI-generated routes often quote it)', () => {
+    const b = clone();
+    // n3 is a reachable terminal node in the sample; quote its id like the model does
+    b.route.endings = [{ id: 'q', title: 'q', condition: "currentNodeId === 'n3'" }];
+    const codes = validateRouteBundle(b, reg).map((e) => e.code);
+    expect(codes).not.toContain('BAD_ENDING_CONDITION');
+    expect(codes).not.toContain('NO_REACHABLE_ENDING');
+  });
+
   it('NO_REACHABLE_ENDING when the only ending targets a non-terminal node', () => {
     const b = clone();
     // n1 has choices (non-terminal); point the ending at it

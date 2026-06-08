@@ -8,6 +8,7 @@ import { effectiveStats, buildPlayerActor, buildEnemyActor } from '../shared/eng
 import { runCombat } from '../shared/engine/combat';
 import { resolveChoice } from '../shared/engine/story';
 import { mulberry32 } from '../shared/engine/dice';
+import { parseEndingCondition } from '../shared/endings';
 import { SaveStore } from './store/SaveStore';
 import { RouteStore } from './store/RouteStore';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
@@ -71,8 +72,8 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
   // sub-project E. A non-matching/different condition format yields no ending.
   function computeEnding(save: SaveState, route: GameRoute): string | undefined {
     for (const e of route.endings) {
-      const m = e.condition.match(/currentNodeId === (\w+)/);
-      if (m && save.currentNodeId === m[1]) return e.id;
+      const target = parseEndingCondition(e.condition);
+      if (target && save.currentNodeId === target) return e.id;
     }
     return undefined;
   }

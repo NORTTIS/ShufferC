@@ -124,6 +124,22 @@ describe('GameSession.applyChoice', () => {
   });
 });
 
+describe('GameSession.applyChoice — quoted ending condition', () => {
+  it('matches an ending whose condition quotes the node id', async () => {
+    const bundle = structuredClone(SAMPLE_BUNDLE);
+    bundle.route.endings = [{ id: 'reach-keep', title: 'Reached the Keep', condition: "currentNodeId === 'n3'" }];
+    const deps = {
+      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      routes: createMemoryRouteStore([bundle]),
+    };
+    const s = createGameSession(createMemoryStore(), deps);
+    const { sessionId } = await s.newGame('rogue');
+    const res = await s.applyChoice(sessionId, 'sneak');
+    expect(res.save.currentNodeId).toBe('n3');
+    expect(res.ending).toBe('reach-keep');
+  });
+});
+
 describe('GameSession.applyChoice — defeat path', () => {
   it('losing the fight returns ending "defeat" and does not advance the node', async () => {
     const deps = {
