@@ -47,6 +47,7 @@ export interface SessionView {
   node: StoryNode;
   effectiveStats: Stats;
   ending?: string;
+  hasNextRoute?: boolean;
 }
 
 export interface ChoiceView extends SessionView {
@@ -90,6 +91,15 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       .filter((r) => r.status === 'published' && !played.includes(r.id));
     if (pool.length === 0) return null;
     return pool[Math.floor(random() * pool.length)].id;
+  }
+
+  // Annotate a view that ended (non-defeat) with whether a further route remains.
+  async function withNextRoute<T extends SessionView>(v: T): Promise<T> {
+    if (v.ending && v.ending !== 'defeat') {
+      const played = v.save.playedRouteIds ?? [v.save.routeId];
+      v.hasNextRoute = (await pickRoute(played)) !== null;
+    }
+    return v;
   }
 
   function view(save: SaveState, bundle: RouteBundle): SessionView {
@@ -154,7 +164,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
     async getView(id: string) {
       const save = await load(id);
       const bundle = await loadBundle(save.routeId);
-      return view(save, bundle);
+      return withNextRoute(view(save, bundle));
     },
 
     async continueToNextRoute(id: string): Promise<SessionView> {
@@ -184,7 +194,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       if (choice.skillCheck) {
         const res = resolveChoice(save, node, choiceId, mulberry32(save.seed));
         await store.put(id, res.save);
-        return { ...view(res.save, bundle), checkPassed: res.checkPassed, roll: res.roll };
+        return withNextRoute({ ...view(res.save, bundle), checkPassed: res.checkPassed, roll: res.roll });
       }
 
       // Path 2: combat choice ("fight") — node has combat and choice has no skill check
@@ -204,7 +214,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
           const res = resolveChoice(save, node, choiceId); // apply outcome + advance
           res.save.character.skillPriority = [...skillPriority]; // persist pre-battle ordering
           await store.put(id, res.save);
-          return { ...view(res.save, bundle), combat };
+          return withNextRoute({ ...view(res.save, bundle), combat });
         }
         // Defeat: do not advance or persist progress
         return { ...view(save, bundle), combat, ending: 'defeat' };
@@ -213,7 +223,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       // Path 3: plain advance (no check, no combat)
       const res = resolveChoice(save, node, choiceId);
       await store.put(id, res.save);
-      return view(res.save, bundle);
+      return withNextRoute(view(res.save, bundle));
     },
 
     async equip(id, slot, itemId) {

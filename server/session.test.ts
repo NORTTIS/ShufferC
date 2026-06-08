@@ -259,3 +259,27 @@ describe('GameSession.continueToNextRoute', () => {
     await expect(s.continueToNextRoute(sessionId)).rejects.toMatchObject({ status: 409 });
   });
 });
+
+describe('GameSession.applyChoice — hasNextRoute', () => {
+  it('sets hasNextRoute=true at an ending when another published route remains', async () => {
+    const second = structuredClone(SAMPLE_BUNDLE);
+    second.route.id = 'route-2';
+    const deps = {
+      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      routes: createMemoryRouteStore([SAMPLE_BUNDLE, second]), random: () => 0,
+    };
+    const s = createGameSession(createMemoryStore(), deps);
+    const { sessionId } = await s.newGame('rogue'); // plays SAMPLE_ROUTE
+    const res = await s.applyChoice(sessionId, 'sneak'); // reaches 'reach-keep' ending
+    expect(res.ending).toBe('reach-keep');
+    expect(res.hasNextRoute).toBe(true);
+  });
+
+  it('sets hasNextRoute=false at an ending when no other published route remains', async () => {
+    const s = newSession(); // default deps: only SAMPLE_BUNDLE
+    const { sessionId } = await s.newGame('rogue');
+    const res = await s.applyChoice(sessionId, 'sneak');
+    expect(res.ending).toBe('reach-keep');
+    expect(res.hasNextRoute).toBe(false);
+  });
+});
