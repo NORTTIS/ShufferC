@@ -136,7 +136,11 @@
       const rows = await api('/admin/routes', { headers: authHeaders() });
       for (const r of rows) {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + r.id + '</td><td>' + r.title + '</td><td>' + r.status + '</td>';
+        for (const val of [r.id, r.title, r.status]) {
+          const cell = document.createElement('td');
+          cell.textContent = val;
+          tr.appendChild(cell);
+        }
         const td = document.createElement('td');
         const view = document.createElement('button');
         view.className = 'secondary'; view.textContent = 'View JSON';
@@ -160,7 +164,7 @@
     }
 
     async function publishRoute(id) {
-      await fetch('/admin/routes/' + id + '/publish', { method: 'POST', headers: authHeaders() });
+      await api('/admin/routes/' + id + '/publish', { method: 'POST', headers: authHeaders() });
       await loadRoutes();
     }
 
