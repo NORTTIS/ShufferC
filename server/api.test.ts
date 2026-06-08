@@ -4,15 +4,27 @@ import { createGameSession } from './session';
 import { createMemoryStore } from './store/memoryStore';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
 import { createFakeProvider, AIProvider } from './ai/provider';
+import { createAuth } from './auth';
 import { BACKGROUNDS } from '../shared/backgrounds';
 import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
+
+const ADMIN = { email: 'admin@test', password: 'pw' };
 
 function app(provider: AIProvider = createFakeProvider([])) {
   const routes = createMemoryRouteStore([structuredClone(SAMPLE_BUNDLE)]);
   const session = createGameSession(createMemoryStore(), {
     backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, routes,
   });
-  return createApp(session, { provider, routes, registries: { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB } });
+  return createApp(session, {
+    provider, routes,
+    registries: { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB },
+    auth: createAuth(ADMIN),
+  });
+}
+
+async function token(a: ReturnType<typeof app>): Promise<string> {
+  const res = await request(a).post('/admin/login').send(ADMIN);
+  return res.body.token as string;
 }
 
 describe('REST API', () => {
@@ -68,6 +80,46 @@ describe('REST API', () => {
   });
 });
 
+describe('Admin auth', () => {
+  it('POST /admin/login with correct creds returns a token', async () => {
+    const res = await request(app()).post('/admin/login').send(ADMIN);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.token).toBe('string');
+  });
+
+  it('POST /admin/login with wrong creds returns 401', async () => {
+    const res = await request(app()).post('/admin/login').send({ email: 'admin@test', password: 'bad' });
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /admin/routes without a token returns 401', async () => {
+    const res = await request(app()).get('/admin/routes');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /admin/routes with a bearer token returns 200', async () => {
+    const a = app();
+    const t = await token(a);
+    const res = await request(a).get('/admin/routes').set('Authorization', `Bearer ${t}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it('GET /admin serves the console HTML', async () => {
+    const res = await request(app()).get('/admin');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('id="login"');
+  });
+
+  it('GET /admin/status with a token reports provider availability', async () => {
+    const a = app();
+    const t = await token(a);
+    const res = await request(a).get('/admin/status').set('Authorization', `Bearer ${t}`);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.providerAvailable).toBe('boolean');
+  });
+});
+
 describe('Admin REST + AI route e2e', () => {
   function genBundle() {
     const b = structuredClone(SAMPLE_BUNDLE);
@@ -79,15 +131,17 @@ describe('Admin REST + AI route e2e', () => {
 
   it('generate → publish → play a generated route end-to-end', async () => {
     const a = app(createFakeProvider([genBundle()]));
+    const t = await token(a);
+    const auth = { Authorization: `Bearer ${t}` };
 
-    const gen = await request(a).post('/admin/routes/generate').send({ contextText: 'ctx', title: 'AI Generated' });
+    const gen = await request(a).post('/admin/routes/generate').set(auth).send({ contextText: 'ctx', title: 'AI Generated' });
     expect(gen.status).toBe(200);
     expect(gen.body.routeId).toBe('ai-route-1');
 
-    const list = await request(a).get('/admin/routes');
+    const list = await request(a).get('/admin/routes').set(auth);
     expect(list.body.map((r: { id: string }) => r.id)).toContain('ai-route-1');
 
-    const pub = await request(a).post('/admin/routes/ai-route-1/publish');
+    const pub = await request(a).post('/admin/routes/ai-route-1/publish').set(auth);
     expect(pub.status).toBe(204);
 
     const play = await request(a).post('/sessions').send({ backgroundId: 'rogue', routeId: 'ai-route-1' });
@@ -98,7 +152,8 @@ describe('Admin REST + AI route e2e', () => {
 
   it('returns 422 with errors when generation never validates', async () => {
     const a = app(createFakeProvider([{}, {}, {}]));
-    const res = await request(a).post('/admin/routes/generate').send({ contextText: 'ctx', title: 'X' });
+    const t = await token(a);
+    const res = await request(a).post('/admin/routes/generate').set('Authorization', `Bearer ${t}`).send({ contextText: 'ctx', title: 'X' });
     expect(res.status).toBe(422);
     expect(Array.isArray(res.body.errors)).toBe(true);
     expect(res.body.attempts).toBe(3);
@@ -107,12 +162,15 @@ describe('Admin REST + AI route e2e', () => {
   it('returns 503 when the provider is unavailable', async () => {
     const unavailable: AIProvider = { available: false, async generateStructured() { throw new Error('x'); } };
     const a = app(unavailable);
-    const res = await request(a).post('/admin/routes/generate').send({ contextText: 'ctx', title: 'X' });
+    const t = await token(a);
+    const res = await request(a).post('/admin/routes/generate').set('Authorization', `Bearer ${t}`).send({ contextText: 'ctx', title: 'X' });
     expect(res.status).toBe(503);
   });
 
   it('publish of an unknown route returns 404', async () => {
-    const res = await request(app()).post('/admin/routes/ghost/publish');
+    const a = app();
+    const t = await token(a);
+    const res = await request(a).post('/admin/routes/ghost/publish').set('Authorization', `Bearer ${t}`);
     expect(res.status).toBe(404);
   });
 });

@@ -1,9 +1,11 @@
 import express, { Request, Response, NextFunction, Express } from 'express';
+import path from 'path';
 import { GameSession, GameError } from './session';
 import { AIProvider } from './ai/provider';
 import { RouteStore } from './store/RouteStore';
 import { Registries } from '../shared/types';
 import { generateFramework } from './ai/frameworkGen';
+import { Auth } from './auth';
 
 type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
 
@@ -11,6 +13,7 @@ export interface AdminDeps {
   provider: AIProvider;
   routes: RouteStore;
   registries: Registries;
+  auth: Auth;
 }
 
 function wrap(handler: Handler) {
@@ -24,6 +27,16 @@ function wrap(handler: Handler) {
   };
 }
 
+/** Express middleware factory: requires a valid `Authorization: Bearer <token>`. */
+function requireAuth(auth: Auth) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const header = req.headers.authorization ?? '';
+    const tokenValue = header.startsWith('Bearer ') ? header.slice(7) : '';
+    if (!auth.verify(tokenValue)) return next(new GameError('Unauthorized', 401));
+    next();
+  };
+}
+
 export function createApp(session: GameSession, admin: AdminDeps): Express {
   const app = express();
 
@@ -32,12 +45,24 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
     next();
   });
   app.options(/.*/, (_req: Request, res: Response) => res.sendStatus(204));
 
   app.use(express.json());
+
+  // ── Admin console page (no auth — it IS the login screen) ─────────────
+  app.get('/admin', (_req: Request, res: Response) => {
+    res.sendFile(path.join(__dirname, 'admin', 'index.html'));
+  });
+
+  // ── Admin login (no auth) ─────────────────────────────────────────────
+  app.post('/admin/login', wrap((req) => {
+    const tokenValue = admin.auth.login(req.body?.email, req.body?.password);
+    if (!tokenValue) throw new GameError('Invalid credentials', 401);
+    return { token: tokenValue };
+  }));
 
   // ── Player ──────────────────────────────────────────────────────────
   app.get('/backgrounds', wrap(() => session.listBackgrounds()));
@@ -54,7 +79,11 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
     session.equip(req.params.id as string, req.body?.slot, req.body?.itemId ?? null),
   ));
 
-  // ── Admin (unauthenticated for now; auth = sub-project D) ─────────────
+  // ── Admin data endpoints (auth required; unauthenticated → 401) ───────
+  app.get('/admin/status', requireAuth(admin.auth), wrap(() => ({ providerAvailable: admin.provider.available })));
+
+  app.use('/admin/routes', requireAuth(admin.auth));
+
   app.post('/admin/routes/generate', wrap(async (req, res) => {
     if (!admin.provider.available) throw new GameError('AI provider unavailable', 503);
     const { contextText, title, nodeCount } = req.body ?? {};
