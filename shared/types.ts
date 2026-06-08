@@ -135,6 +135,13 @@ export interface SaveState {
   currentNodeId: string;
   seed: number;
   playedRouteIds?: string[];   // route ids already consumed; never re-picked
+  liveNodes?: Record<string, LiveOverlay>;   // nodeId → Flash-enriched text (per playthrough)
+}
+
+/** Flash-generated text for one live node, overlaid onto its stub at view time. */
+export interface LiveOverlay {
+  prose: string;
+  choiceTexts: string[];   // length === the stub node's choices.length, same order
 }
 
 // ── Sub-project C (framework generation) ──────────────────────────────
