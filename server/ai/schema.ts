@@ -60,8 +60,8 @@ export const GEN_BUNDLE_JSON_SCHEMA = z.toJSONSchema(GenBundleSchema) as object;
 
 // ── Live event-gen (slice C3): one node's enriched text ───────────────
 export const EventOverlaySchema = z.object({
-  prose: z.string().min(1),
-  choiceTexts: z.array(z.string().min(1)),
+  prose: z.string().trim().min(1),
+  choiceTexts: z.array(z.string().trim().min(1)),
 });
 
 export type ParsedEventOverlay = z.infer<typeof EventOverlaySchema>;
