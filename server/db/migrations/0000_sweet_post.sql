@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+--> statement-breakpoint
 CREATE TABLE "game_routes" (
 	"id" text PRIMARY KEY NOT NULL,
 	"title" text NOT NULL,
