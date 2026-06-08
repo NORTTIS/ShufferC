@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { AIProvider } from './provider';
+import { AIProvider, GenerateOptions } from './provider';
 
 export interface GeminiConfig {
   apiKey: string | null;
@@ -46,10 +46,11 @@ export function sanitizeForGemini(node: unknown): unknown {
 }
 
 /**
- * Real Gemini provider. Uses the Pro model by default (framework generation); callers pass `{ model: 'flash' }` for live event-gen. JSON
- * response mode + the passed responseSchema (sanitized to Gemini's subset). When
- * no API key is configured the provider reports `available:false` and never touches
- * the network (so the server boots and tests run without a key). Smoke-tested
+ * Real Gemini provider. Uses the Pro model by default (framework generation);
+ * callers pass `{ model: 'flash' }` for live event-gen. JSON response mode +
+ * the passed responseSchema (sanitized to Gemini's subset). When no API key is
+ * configured the provider reports `available:false` and never touches the
+ * network (so the server boots and tests run without a key). Smoke-tested
  * manually, never in Jest.
  */
 export function createGeminiProvider(cfg: GeminiConfig): AIProvider {
@@ -58,7 +59,7 @@ export function createGeminiProvider(cfg: GeminiConfig): AIProvider {
 
   return {
     available,
-    async generateStructured(prompt: string, jsonSchema: object, opts?: { model?: 'pro' | 'flash' }): Promise<unknown> {
+    async generateStructured(prompt: string, jsonSchema: object, opts?: GenerateOptions): Promise<unknown> {
       if (!client) throw new Error('Gemini provider unavailable: no API key');
       const modelName = opts?.model === 'flash' ? cfg.flashModel : cfg.proModel;
       const model = client.getGenerativeModel({
