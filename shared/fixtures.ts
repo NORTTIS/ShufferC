@@ -1,4 +1,4 @@
-import { Item, Skill, Enemy, CharacterState, StoryNode, GameRoute } from './types';
+import { Item, Skill, Enemy, CharacterState, StoryNode, GameRoute, RouteBundle } from './types';
 
 export const SKILL_DB: Record<string, Skill> = {
   slash: { id: 'slash', name: 'Slash', targetStat: 'str', power: 1, effectTarget: 'enemy', sprite: 'skill.slash' },
@@ -53,3 +53,5 @@ export const SAMPLE_ROUTE: GameRoute = {
   endings: [{ id: 'reach-keep', title: 'Reached the Keep', condition: 'currentNodeId === n3' }],
   status: 'published',
 };
+
+export const SAMPLE_BUNDLE: RouteBundle = { route: SAMPLE_ROUTE, nodes: SAMPLE_NODES };

@@ -16,6 +16,7 @@ export interface SessionView {
   node: StoryNode;
   effectiveStats: Stats;
   ending?: string;
+  hasNextRoute?: boolean;
 }
 export interface ChoiceView extends SessionView {
   checkPassed?: boolean;
@@ -44,8 +45,10 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const gameApi = {
   listBackgrounds: () => call<Background[]>('/backgrounds'),
-  newGame: (backgroundId: string) =>
-    call<NewGameView>('/sessions', { method: 'POST', body: JSON.stringify({ backgroundId }) }),
+  newGame: (backgroundId: string, routeId?: string) =>
+    call<NewGameView>('/sessions', { method: 'POST', body: JSON.stringify({ backgroundId, routeId }) }),
+  continueRoute: (id: string) =>
+    call<NewGameView>(`/sessions/${id}/continue`, { method: 'POST' }),
   getView: (id: string) => call<SessionView>(`/sessions/${id}`),
   choose: (id: string, choiceId: string, skillPriority?: string[]) =>
     call<ChoiceView>(`/sessions/${id}/choice`, {

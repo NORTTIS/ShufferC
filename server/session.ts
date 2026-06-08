@@ -1,16 +1,17 @@
 import {
-  SaveState, StoryNode, Stats, Item, Skill, Enemy, EquipSlot, CombatResult, GameRoute,
+  SaveState, StoryNode, Stats, Item, Skill, Enemy, EquipSlot, CombatResult, GameRoute, RouteBundle,
 } from '../shared/types';
 import { SAVE_VERSION, EQUIP_SLOTS } from '../shared/constants';
 import { Background, BACKGROUNDS } from '../shared/backgrounds';
-import {
-  SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_NODES, SAMPLE_ROUTE,
-} from '../shared/fixtures';
+import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
 import { effectiveStats, buildPlayerActor, buildEnemyActor } from '../shared/engine/character';
 import { runCombat } from '../shared/engine/combat';
 import { resolveChoice } from '../shared/engine/story';
 import { mulberry32 } from '../shared/engine/dice';
+import { parseEndingCondition } from '../shared/endings';
 import { SaveStore } from './store/SaveStore';
+import { RouteStore } from './store/RouteStore';
+import { createMemoryRouteStore } from './store/memoryRouteStore';
 
 // Fixed starting seed: the vertical slice is intentionally deterministic so the
 // client can replay the combat log and match the server exactly (acceptance #6).
@@ -26,20 +27,20 @@ export class GameError extends Error {
 
 export interface SessionDeps {
   backgrounds: Record<string, Background>;
-  nodeDb: Record<string, StoryNode>;
   itemDb: Record<string, Item>;
   skillDb: Record<string, Skill>;
   enemyDb: Record<string, Enemy>;
-  route: GameRoute;
+  routes: RouteStore;
+  random?: () => number;
 }
 
 const DEFAULT_DEPS: SessionDeps = {
   backgrounds: BACKGROUNDS,
-  nodeDb: SAMPLE_NODES,
   itemDb: ITEM_DB,
   skillDb: SKILL_DB,
   enemyDb: ENEMY_DB,
-  route: SAMPLE_ROUTE,
+  routes: createMemoryRouteStore([SAMPLE_BUNDLE]),
+  random: Math.random,
 };
 
 export interface SessionView {
@@ -47,6 +48,7 @@ export interface SessionView {
   node: StoryNode;
   effectiveStats: Stats;
   ending?: string;
+  hasNextRoute?: boolean;
 }
 
 export interface ChoiceView extends SessionView {
@@ -57,8 +59,9 @@ export interface ChoiceView extends SessionView {
 
 export interface GameSession {
   listBackgrounds(): Background[];
-  newGame(backgroundId: string): Promise<SessionView & { sessionId: string }>;
+  newGame(backgroundId: string, routeId?: string): Promise<SessionView & { sessionId: string }>;
   getView(id: string): Promise<SessionView>;
+  continueToNextRoute(id: string): Promise<SessionView>;
   applyChoice(id: string, choiceId: string, skillPriority?: string[]): Promise<ChoiceView>;
   equip(id: string, slot: string, itemId: string | null): Promise<{ save: SaveState; effectiveStats: Stats }>;
 }
@@ -66,19 +69,52 @@ export interface GameSession {
 export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_DEPS): GameSession {
   // Slice simplification (spec §4.3): endings are matched by a simple
   // `currentNodeId === <id>` condition string. Richer ending conditions are
-  // sub-project E. A non-matching/different condition format simply yields no ending.
-  function computeEnding(save: SaveState): string | undefined {
-    for (const e of deps.route.endings) {
-      const m = e.condition.match(/currentNodeId === (\w+)/);
-      if (m && save.currentNodeId === m[1]) return e.id;
+  // sub-project E. A non-matching/different condition format yields no ending.
+  function computeEnding(save: SaveState, route: GameRoute): string | undefined {
+    for (const e of route.endings) {
+      const target = parseEndingCondition(e.condition);
+      if (target && save.currentNodeId === target) return e.id;
     }
     return undefined;
   }
 
-  function view(save: SaveState): SessionView {
-    const node = deps.nodeDb[save.currentNodeId];
+  async function loadBundle(routeId: string): Promise<RouteBundle> {
+    const bundle = await deps.routes.get(routeId);
+    if (!bundle) throw new GameError(`Route ${routeId} not found`, 404);
+    return bundle;
+  }
+
+  const random = deps.random ?? Math.random;
+
+  // Pick a random published route id not already consumed; null if none remain.
+  async function pickRoute(played: string[]): Promise<string | null> {
+    const pool = (await deps.routes.list())
+      .filter((r) => r.status === 'published' && !played.includes(r.id));
+    if (pool.length === 0) return null;
+    return pool[Math.floor(random() * pool.length)].id;
+  }
+
+  // Annotate a terminal view (non-defeat) with whether a further route remains.
+  // "Terminal" means the view has an ending OR the current node has no choices —
+  // the client routes to the ending screen in either case.
+  async function withNextRoute<T extends SessionView>(v: T): Promise<T> {
+    const isTerminal = v.ending !== undefined || v.node.choices.length === 0;
+    if (isTerminal && v.ending !== 'defeat') {
+      const played = v.save.playedRouteIds ?? [v.save.routeId];
+      v.hasNextRoute = (await pickRoute(played)) !== null;
+    }
+    return v;
+  }
+
+  function view(save: SaveState, bundle: RouteBundle): SessionView {
+    const node = bundle.nodes[save.currentNodeId];
     if (!node) throw new GameError(`Node ${save.currentNodeId} not found`, 500);
-    return { save, node, effectiveStats: effectiveStats(save.character, deps.itemDb), ending: computeEnding(save) };
+    return {
+      save,
+      node,
+      effectiveStats: effectiveStats(save.character, deps.itemDb),
+      ending: computeEnding(save, bundle.route),
+    };
   }
 
   async function load(id: string): Promise<SaveState> {
@@ -92,13 +128,25 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       return Object.values(deps.backgrounds);
     },
 
-    async newGame(backgroundId: string) {
+    async newGame(backgroundId: string, routeId?: string) {
       const bg = deps.backgrounds[backgroundId];
       if (!bg) throw new GameError(`Unknown background ${backgroundId}`, 400);
-      const startNodeId = deps.route.acts[0].nodeIds[0];
+
+      let resolvedRouteId = routeId;
+      if (!resolvedRouteId) {
+        const picked = await pickRoute([]);
+        if (!picked) throw new GameError('No published routes available', 409);
+        resolvedRouteId = picked;
+      }
+
+      const bundle = await loadBundle(resolvedRouteId);
+      if (bundle.route.status !== 'published') {
+        throw new GameError(`Route ${resolvedRouteId} is not published`, 409);
+      }
+      const startNodeId = bundle.route.acts[0].nodeIds[0];
       const save: SaveState = {
         version: SAVE_VERSION,
-        routeId: deps.route.id,
+        routeId: bundle.route.id,
         character: {
           background: bg.id,
           baseStats: { ...bg.baseStats },
@@ -111,30 +159,46 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         choiceLog: [],
         currentNodeId: startNodeId,
         seed: START_SEED,
+        playedRouteIds: [bundle.route.id],
       };
       const sessionId = await store.create(save);
-      return { sessionId, ...view(save) };
+      return { sessionId, ...view(save, bundle) };
     },
 
     async getView(id: string) {
-      return view(await load(id));
+      const save = await load(id);
+      const bundle = await loadBundle(save.routeId);
+      return withNextRoute(view(save, bundle));
+    },
+
+    async continueToNextRoute(id: string): Promise<SessionView> {
+      const save = await load(id);
+      const played = save.playedRouteIds ?? [save.routeId];
+      const nextId = await pickRoute(played);
+      if (!nextId) throw new GameError('No more routes', 409);
+
+      const bundle = await loadBundle(nextId);
+      save.routeId = nextId;
+      save.currentNodeId = bundle.route.acts[0].nodeIds[0];
+      save.playedRouteIds = [...played, nextId];
+      // character, reputation, flags, choiceLog, seed are intentionally preserved
+      await store.put(id, save);
+      return view(save, bundle);
     },
 
     async applyChoice(id, choiceId, skillPriority) {
       const save = await load(id);
-      const node = deps.nodeDb[save.currentNodeId];
+      const bundle = await loadBundle(save.routeId);
+      const node = bundle.nodes[save.currentNodeId];
       if (!node) throw new GameError(`Node ${save.currentNodeId} not found`, 500);
       const choice = node.choices.find((c) => c.id === choiceId);
       if (!choice) throw new GameError(`Choice ${choiceId} not in node ${node.id}`, 400);
 
-      // Choice dispatch (spec §4.2): a skill-check choice resolves as a check;
-      // otherwise, if the node has combat, the choice is a "fight". The slice's
-      // route never gives a single choice BOTH a skillCheck and node combat.
       // Path 1: skill-check choice (e.g. "sneak")
       if (choice.skillCheck) {
         const res = resolveChoice(save, node, choiceId, mulberry32(save.seed));
         await store.put(id, res.save);
-        return { ...view(res.save), checkPassed: res.checkPassed, roll: res.roll };
+        return withNextRoute({ ...view(res.save, bundle), checkPassed: res.checkPassed, roll: res.roll });
       }
 
       // Path 2: combat choice ("fight") — node has combat and choice has no skill check
@@ -142,11 +206,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         if (!skillPriority || skillPriority.length === 0) {
           throw new GameError('skillPriority required for a combat choice', 400);
         }
-        const player = buildPlayerActor(
-          { ...save.character, skillPriority },
-          deps.itemDb,
-          deps.skillDb,
-        );
+        const player = buildPlayerActor({ ...save.character, skillPriority }, deps.itemDb, deps.skillDb);
         const enemies = node.combat.enemyIds.map((eid) => {
           const enemy = deps.enemyDb[eid];
           if (!enemy) throw new GameError(`Enemy ${eid} not found`, 500);
@@ -155,19 +215,19 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         const combat = runCombat({ player, enemies, seed: save.seed });
 
         if (combat.winner === 'player') {
-          const res = resolveChoice(save, node, choiceId); // apply outcome + advance (no skillCheck)
-          res.save.character.skillPriority = [...skillPriority]; // persist the pre-battle ordering
+          const res = resolveChoice(save, node, choiceId); // apply outcome + advance
+          res.save.character.skillPriority = [...skillPriority]; // persist pre-battle ordering
           await store.put(id, res.save);
-          return { ...view(res.save), combat };
+          return withNextRoute({ ...view(res.save, bundle), combat });
         }
         // Defeat: do not advance or persist progress
-        return { ...view(save), combat, ending: 'defeat' };
+        return { ...view(save, bundle), combat, ending: 'defeat' };
       }
 
       // Path 3: plain advance (no check, no combat)
       const res = resolveChoice(save, node, choiceId);
       await store.put(id, res.save);
-      return view(res.save);
+      return withNextRoute(view(res.save, bundle));
     },
 
     async equip(id, slot, itemId) {
