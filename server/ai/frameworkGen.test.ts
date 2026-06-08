@@ -6,11 +6,15 @@ import { Registries, RouteBundle } from '../../shared/types';
 const reg: Registries = { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB };
 const params = { contextText: 'ctx', title: 'T' };
 
-const validRaw = (): RouteBundle => structuredClone(SAMPLE_BUNDLE);
-const invalidRefRaw = (): RouteBundle => {
+// The model emits the "gen" shape: nodes as an array. frameworkGen converts it
+// back to a keyed record, so the fakes here must use the array form.
+const toGen = (b: RouteBundle) => ({ route: b.route, nodes: Object.values(b.nodes) });
+
+const validRaw = () => toGen(structuredClone(SAMPLE_BUNDLE));
+const invalidRefRaw = () => {
   const b = structuredClone(SAMPLE_BUNDLE);
   b.nodes['n1'].combat = { enemyIds: ['dragon'] }; // UNKNOWN_ENEMY → ref error
-  return b;
+  return toGen(b);
 };
 
 describe('generateFramework', () => {
@@ -45,7 +49,7 @@ describe('generateFramework', () => {
   it('treats moderation-blocked prose as a failed attempt', async () => {
     const bad = structuredClone(SAMPLE_BUNDLE);
     bad.nodes['n1'].prose = 'There is gore everywhere.'; // banned term
-    const provider = createFakeProvider([bad]);
+    const provider = createFakeProvider([toGen(bad)]);
     const res = await generateFramework(provider, params, reg, { maxAttempts: 1 });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.errors.some((e: { message: string }) => e.message.includes('moderation'))).toBe(true);

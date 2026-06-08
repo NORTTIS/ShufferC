@@ -1,9 +1,9 @@
 import { AIProvider } from './provider';
-import { RouteBundleSchema, ROUTE_BUNDLE_JSON_SCHEMA } from './schema';
+import { GenBundleSchema, GEN_BUNDLE_JSON_SCHEMA } from './schema';
 import { buildFrameworkPrompt } from './prompt';
 import { moderate } from './moderate';
 import { validateRouteBundle } from '../../shared/validation';
-import { GenerationParams, Registries, GenerationResult, RouteBundle, ValidationError } from '../../shared/types';
+import { GenerationParams, Registries, GenerationResult, RouteBundle, StoryNode, ValidationError } from '../../shared/types';
 
 /**
  * Orchestrates one framework generation. Loops prompt → provider → Zod parse →
@@ -24,11 +24,11 @@ export async function generateFramework(
   while (attempts < maxAttempts) {
     attempts++;
     const prompt = buildFrameworkPrompt(params, reg, lastErrors.length ? lastErrors : undefined);
-    const raw = await provider.generateStructured(prompt, ROUTE_BUNDLE_JSON_SCHEMA);
+    const raw = await provider.generateStructured(prompt, GEN_BUNDLE_JSON_SCHEMA);
     lastRaw = raw;
 
     // Shape layer.
-    const parsed = RouteBundleSchema.safeParse(raw);
+    const parsed = GenBundleSchema.safeParse(raw);
     if (!parsed.success) {
       lastErrors = parsed.error.issues.map((i) => ({
         path: i.path.join('.'),
@@ -38,7 +38,10 @@ export async function generateFramework(
       continue;
     }
 
-    const bundle = parsed.data as unknown as RouteBundle;
+    // Convert the model's node array into the keyed record RouteBundle uses.
+    const nodes: Record<string, StoryNode> = {};
+    for (const node of parsed.data.nodes) nodes[node.id] = node as unknown as StoryNode;
+    const bundle = { route: parsed.data.route, nodes } as unknown as RouteBundle;
 
     // Referential layer.
     const refErrors = validateRouteBundle(bundle, reg);

@@ -1,5 +1,5 @@
 import { createGeminiProvider, sanitizeForGemini } from './gemini';
-import { ROUTE_BUNDLE_JSON_SCHEMA } from './schema';
+import { GEN_BUNDLE_JSON_SCHEMA } from './schema';
 
 const BANNED = ['$schema', '$id', '$ref', '$defs', 'definitions', 'additionalProperties', 'propertyNames', 'patternProperties'];
 
@@ -14,7 +14,7 @@ function hasKeyDeep(node: unknown, key: string): boolean {
 describe('sanitizeForGemini', () => {
   it('strips every Gemini-unsupported keyword from the real route schema', () => {
     // Guards the live 400: Gemini rejects full-JSON-Schema keywords in responseSchema.
-    const sanitized = sanitizeForGemini(ROUTE_BUNDLE_JSON_SCHEMA);
+    const sanitized = sanitizeForGemini(GEN_BUNDLE_JSON_SCHEMA);
     for (const key of BANNED) {
       expect(hasKeyDeep(sanitized, key)).toBe(false);
     }

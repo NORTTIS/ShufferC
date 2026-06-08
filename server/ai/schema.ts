@@ -44,12 +44,16 @@ const RouteSchema = z.object({
   status: z.enum(['draft', 'published']),
 });
 
-export const RouteBundleSchema = z.object({
+// The model emits `nodes` as an ARRAY (each node carries its own `id`). Gemini's
+// structured output cannot express a dynamic-keyed object/record, so frameworkGen
+// converts this array into the Record<string, StoryNode> that RouteBundle uses,
+// keyed by node id.
+export const GenBundleSchema = z.object({
   route: RouteSchema,
-  nodes: z.record(z.string(), NodeSchema),
+  nodes: z.array(NodeSchema),
 });
 
-export type ParsedBundle = z.infer<typeof RouteBundleSchema>;
+export type ParsedGenBundle = z.infer<typeof GenBundleSchema>;
 
 /** JSON Schema fed to Gemini's responseSchema so the model emits matching JSON. */
-export const ROUTE_BUNDLE_JSON_SCHEMA = z.toJSONSchema(RouteBundleSchema) as object;
+export const GEN_BUNDLE_JSON_SCHEMA = z.toJSONSchema(GenBundleSchema) as object;

@@ -121,12 +121,13 @@ describe('Admin auth', () => {
 });
 
 describe('Admin REST + AI route e2e', () => {
+  // The provider returns the model's "gen" shape: nodes as an array.
   function genBundle() {
     const b = structuredClone(SAMPLE_BUNDLE);
     b.route.id = 'ai-route-1';
     b.route.title = 'AI Generated';
     b.route.status = 'draft';
-    return b;
+    return { route: b.route, nodes: Object.values(b.nodes) };
   }
 
   it('generate → publish → play a generated route end-to-end', async () => {
