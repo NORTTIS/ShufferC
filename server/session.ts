@@ -59,6 +59,7 @@ export interface GameSession {
   listBackgrounds(): Background[];
   newGame(backgroundId: string, routeId?: string): Promise<SessionView & { sessionId: string }>;
   getView(id: string): Promise<SessionView>;
+  continueToNextRoute(id: string): Promise<SessionView>;
   applyChoice(id: string, choiceId: string, skillPriority?: string[]): Promise<ChoiceView>;
   equip(id: string, slot: string, itemId: string | null): Promise<{ save: SaveState; effectiveStats: Stats }>;
 }
@@ -153,6 +154,21 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
     async getView(id: string) {
       const save = await load(id);
       const bundle = await loadBundle(save.routeId);
+      return view(save, bundle);
+    },
+
+    async continueToNextRoute(id: string): Promise<SessionView> {
+      const save = await load(id);
+      const played = save.playedRouteIds ?? [save.routeId];
+      const nextId = await pickRoute(played);
+      if (!nextId) throw new GameError('No more routes', 409);
+
+      const bundle = await loadBundle(nextId);
+      save.routeId = nextId;
+      save.currentNodeId = bundle.route.acts[0].nodeIds[0];
+      save.playedRouteIds = [...played, nextId];
+      // character, reputation, flags, choiceLog, seed are intentionally preserved
+      await store.put(id, save);
       return view(save, bundle);
     },
 

@@ -213,3 +213,49 @@ describe('GameSession.newGame — route selection', () => {
     await expect(s.newGame('rogue')).rejects.toMatchObject({ status: 409 });
   });
 });
+
+describe('GameSession.continueToNextRoute', () => {
+  function depsWith(...bundles: RouteBundle[]) {
+    return {
+      backgrounds: BACKGROUNDS,
+      itemDb: ITEM_DB,
+      skillDb: SKILL_DB,
+      enemyDb: ENEMY_DB,
+      routes: createMemoryRouteStore(bundles),
+      random: () => 0,
+    };
+  }
+
+  it('carries the character into the next published route and resets the node', async () => {
+    const second = structuredClone(SAMPLE_BUNDLE);
+    second.route.id = 'route-2';
+    const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE, second));
+    const { sessionId } = await s.newGame('rogue'); // picks SAMPLE_ROUTE (index 0)
+    await s.applyChoice(sessionId, 'sneak'); // hero rep -> 1, reaches an ending
+
+    const res = await s.continueToNextRoute(sessionId);
+    expect(res.save.routeId).toBe('route-2');               // the remaining route
+    expect(res.save.currentNodeId).toBe('n1');              // new route start
+    expect(res.node.id).toBe('n1');
+    expect(res.save.reputation.hero).toBe(1);               // character carried over
+    expect(res.save.seed).toBe(7);                          // seed unchanged
+    expect(res.save.playedRouteIds).toEqual([SAMPLE_ROUTE.id, 'route-2']);
+  });
+
+  it('never re-picks an already played route', async () => {
+    const second = structuredClone(SAMPLE_BUNDLE);
+    second.route.id = 'route-2';
+    const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE, second));
+    const { sessionId } = await s.newGame('rogue');
+    const next = await s.continueToNextRoute(sessionId);
+    expect(next.save.routeId).toBe('route-2');
+    // pool now exhausted
+    await expect(s.continueToNextRoute(sessionId)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('throws 409 when no further published route remains', async () => {
+    const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE));
+    const { sessionId } = await s.newGame('rogue'); // only route -> already played
+    await expect(s.continueToNextRoute(sessionId)).rejects.toMatchObject({ status: 409 });
+  });
+});
