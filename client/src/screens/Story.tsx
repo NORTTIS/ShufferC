@@ -1,5 +1,8 @@
 import React from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Screen, Prose, Card, Button, Tag, Heading, StatRow, Label } from '../components';
+import { space } from '../theme';
+import { useResponsive } from '../hooks/useResponsive';
 import type { SessionView, ChoiceView } from '../services/api';
 
 export function Story({
@@ -8,51 +11,67 @@ export function Story({
   view: SessionView;
   lastChoice: ChoiceView | null;
   busy: boolean;
-  onChoose: (choiceId: string) => void;   // skill-check / plain choices
-  onFight: (choiceId: string) => void;    // fight choices (route to combat)
+  onChoose: (choiceId: string) => void;
+  onFight: (choiceId: string) => void;
   onInventory: () => void;
 }) {
+  const layout = useResponsive();
   const nodeHasCombat = !!view.node.combat;
+  const rep = view.save.reputation;
 
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.prose}>{view.node.prose}</Text>
+  const rail = layout.showRail ? (
+    <View style={styles.rail}>
+      <Heading level="heading">{view.save.character.background}</Heading>
+      <StatRow stats={view.effectiveStats} />
+      <Label>Reputation — hero {rep.hero} · villain {rep.villain}</Label>
+    </View>
+  ) : null;
+
+  const main = (
+    <View style={styles.main}>
+      <Prose>{view.node.prose}</Prose>
 
       {lastChoice?.roll != null && (
-        <Text style={styles.check}>
-          Skill check: rolled {lastChoice.roll} → {lastChoice.checkPassed ? 'PASS' : 'FAIL'}
-        </Text>
+        <Tag
+          text={`Skill check · rolled ${lastChoice.roll} → ${lastChoice.checkPassed ? 'PASS' : 'FAIL'}`}
+          tone={lastChoice.checkPassed ? 'success' : 'danger'}
+        />
       )}
 
       {view.node.choices.map((c) => {
         const isFight = nodeHasCombat && !c.skillCheck;
+        const label = `${c.text}${c.skillCheck ? ` (${c.skillCheck.stat.toUpperCase()} check)` : ''}${isFight ? ' ⚔' : ''}`;
         return (
-          <Pressable
+          <Button
             key={c.id}
-            style={styles.choice}
+            label={label}
+            variant={isFight ? 'danger' : 'ghost'}
             disabled={busy}
             onPress={() => (isFight ? onFight(c.id) : onChoose(c.id))}
-          >
-            <Text style={styles.choiceText}>
-              {c.text}{c.skillCheck ? ` (${c.skillCheck.stat.toUpperCase()} check)` : ''}{isFight ? ' ⚔️' : ''}
-            </Text>
-          </Pressable>
+          />
         );
       })}
 
-      <Pressable style={styles.inv} onPress={onInventory} disabled={busy}>
-        <Text style={styles.invText}>Inventory / Equipment</Text>
-      </Pressable>
-    </ScrollView>
+      <Card onPress={busy ? undefined : onInventory}>
+        <Label>Inventory / Equipment</Label>
+      </Card>
+    </View>
+  );
+
+  return (
+    <Screen>
+      {rail ? (
+        <View style={styles.split}>
+          {main}
+          {rail}
+        </View>
+      ) : main}
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, gap: 12 },
-  prose: { fontSize: 16, lineHeight: 24 },
-  check: { fontStyle: 'italic', color: '#555' },
-  choice: { borderWidth: 1, borderColor: '#446', borderRadius: 8, padding: 12, backgroundColor: '#eef' },
-  choiceText: { fontSize: 16 },
-  inv: { padding: 10, marginTop: 16 },
-  invText: { textAlign: 'center', color: '#446', textDecorationLine: 'underline' },
+  split: { flexDirection: 'row', gap: space.lg },
+  main: { flex: 1, gap: space.md },
+  rail: { width: 240, gap: space.sm },
 });

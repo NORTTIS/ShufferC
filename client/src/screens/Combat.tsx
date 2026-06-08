@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
-import type { SessionView, ChoiceView } from '../services/api';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Screen, Heading, Card, Button, Tag } from '../components';
+import { colors, space } from '../theme';
 import { sprite } from '../assets';
+import type { SessionView, ChoiceView } from '../services/api';
 
 export function Combat({
   view, lastChoice, busy, onFight,
@@ -11,7 +13,6 @@ export function Combat({
   busy: boolean;
   onFight: (skillPriority: string[]) => void;
 }) {
-  // Pre-battle: arrange skill priority (start from the saved order).
   const [priority, setPriority] = useState<string[]>(view.save.character.skillPriority);
 
   const move = (i: number, dir: -1 | 1) => {
@@ -22,7 +23,6 @@ export function Combat({
     setPriority(next);
   };
 
-  // Replay the combat log step by step once we have a result.
   const log = lastChoice?.combat?.log ?? [];
   const [shown, setShown] = useState(0);
   useEffect(() => {
@@ -40,25 +40,28 @@ export function Combat({
 
   if (log.length === 0) {
     return (
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Arrange skill priority</Text>
+      <Screen>
+        <Heading level="title">Arrange skill priority</Heading>
         {priority.map((id, i) => (
-          <View key={id} style={styles.row}>
-            <Text style={styles.skill}>{i + 1}. {id}</Text>
-            <Pressable disabled={busy} onPress={() => move(i, -1)}><Text style={styles.arrow}>▲</Text></Pressable>
-            <Pressable disabled={busy} onPress={() => move(i, 1)}><Text style={styles.arrow}>▼</Text></Pressable>
-          </View>
+          <Card key={id}>
+            <View style={styles.row}>
+              <Text style={styles.skill}>{i + 1}. {id}</Text>
+              <Pressable disabled={busy} onPress={() => move(i, -1)}><Text style={styles.arrow}>▲</Text></Pressable>
+              <Pressable disabled={busy} onPress={() => move(i, 1)}><Text style={styles.arrow}>▼</Text></Pressable>
+            </View>
+          </Card>
         ))}
-        <Pressable style={styles.engage} disabled={busy} onPress={() => onFight(priority)}>
-          <Text style={styles.engageText}>Engage ⚔️</Text>
-        </Pressable>
-      </ScrollView>
+        <Button label="Engage ⚔" variant="danger" busy={busy} onPress={() => onFight(priority)} />
+      </Screen>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Battle ({lastChoice?.combat?.winner})</Text>
+    <Screen>
+      <View style={styles.battleHead}>
+        <Heading level="title">Battle</Heading>
+        <Tag text={`Winner: ${lastChoice?.combat?.winner}`} tone="gold" />
+      </View>
       {log.slice(0, shown).map((e, i) => (
         <Text key={i} style={styles.event}>
           R{e.round} {e.actorId} {e.type}
@@ -67,17 +70,14 @@ export function Combat({
           {e.note ? ` (${e.note})` : ''}
         </Text>
       ))}
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, gap: 8 },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  skill: { fontSize: 16, flex: 1 },
-  arrow: { fontSize: 18, paddingHorizontal: 8 },
-  engage: { backgroundColor: '#a33', borderRadius: 8, padding: 14, marginTop: 16 },
-  engageText: { color: 'white', textAlign: 'center', fontSize: 16, fontWeight: '700' },
-  event: { fontVariant: ['tabular-nums'], fontSize: 14 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  skill: { fontSize: 16, flex: 1, color: colors.inkPrimary },
+  arrow: { fontSize: 18, paddingHorizontal: space.sm, color: colors.gold },
+  battleHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  event: { fontVariant: ['tabular-nums'], fontSize: 14, color: colors.inkPrimary },
 });

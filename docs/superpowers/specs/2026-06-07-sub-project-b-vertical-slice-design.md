@@ -1,6 +1,6 @@
 # Sub-project B: Vertical Slice — Design Doc
 
-> Phần tiếp theo của "Life in Adventure: AI Chronicles" sau **Sub-project A (Engine Core)**.
+> Phần tiếp theo của "ShufferC: AI Chronicles" sau **Sub-project A (Engine Core)**.
 > Mục tiêu: chơi hết **1 tuyến hardcode end-to-end** qua client RN ↔ REST ↔ engine `shared/`, chứng minh luồng chạy thông.
 > Ngày: 2026-06-07. Phụ thuộc: A (đã hoàn thành, 44 unit test xanh).
 

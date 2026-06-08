@@ -1,6 +1,6 @@
-# Life in Adventure: AI Chronicles — Design Doc
+# ShufferC: AI Chronicles — Design Doc
 
-> Bản mở rộng của game text-RPG "Life in Adventure", bổ sung cơ chế **AI sinh cốt truyện** từ tiểu thuyết do admin nạp vào.
+> Bản mở rộng của game text-RPG "ShufferC", bổ sung cơ chế **AI sinh cốt truyện** từ tiểu thuyết do admin nạp vào.
 > Mục tiêu: **đồ án / học tập** — ưu tiên đầy đủ tính năng + kiến trúc rõ ràng hơn là tối ưu chi phí/quy mô.
 > Ngày: 2026-06-05.
 

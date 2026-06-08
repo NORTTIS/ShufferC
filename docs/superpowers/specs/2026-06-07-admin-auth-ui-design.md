@@ -1,6 +1,6 @@
 # Admin Login + Admin UI — Design Doc
 
-> Part of **Life in Adventure: AI Chronicles**. A minimal slice of Sub-project D (Admin CMS): a simple admin login plus a browser UI that drives the Sub-project C (slice C1) route-generation endpoints.
+> Part of **ShufferC: AI Chronicles**. A minimal slice of Sub-project D (Admin CMS): a simple admin login plus a browser UI that drives the Sub-project C (slice C1) route-generation endpoints.
 > Goal: academic / learning project — easy local setup over production hardening.
 > Date: 2026-06-07.
 > Depends on: Sub-project C slice C1 (admin REST endpoints) — complete on branch `feature/c1-framework-gen`, where this work continues.
