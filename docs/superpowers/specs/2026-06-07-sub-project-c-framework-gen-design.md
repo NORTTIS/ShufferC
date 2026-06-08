@@ -1,6 +1,6 @@
 # Sub-project C (slice C1): AI Framework Generation — Design Doc
 
-> Part of **Life in Adventure: AI Chronicles**. Parent design: `2026-06-05-life-in-adventure-ai-chronicles-design.md` §4 (Pipeline AI).
+> Part of **ShufferC: AI Chronicles**. Parent design: `2026-06-05-life-in-adventure-ai-chronicles-design.md` §4 (Pipeline AI).
 > Goal: academic / learning project — prioritise completeness + clear architecture over cost/scale.
 > Date: 2026-06-07.
 > Depends on: Sub-project A (engine core) + Sub-project B (vertical slice) — both complete.

@@ -25,7 +25,7 @@ export function AuthScreen({
   return (
     <Screen center>
       <View style={styles.brand}>
-        <Heading level="display">Life in Adventure</Heading>
+        <Heading level="display">ShufferC</Heading>
         <Label>AI Chronicles</Label>
       </View>
       <Divider />

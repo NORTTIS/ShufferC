@@ -12,7 +12,7 @@ import { Ending } from './src/screens/Ending';
 import { Screen, Heading, Button, Banner } from './src/components';
 import { colors, space } from './src/theme';
 
-const APP_TITLE = 'Life in Adventure';
+const APP_TITLE = 'ShufferC';
 
 export default function App() {
   const auth = useAuth();

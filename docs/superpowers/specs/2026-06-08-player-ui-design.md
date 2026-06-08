@@ -1,6 +1,6 @@
 # Player UI — Design System, Auth & Walkthrough Reskin — Design Doc
 
-> Part of **Life in Adventure: AI Chronicles** (Sub-project B/E — player client polish).
+> Part of **ShufferC: AI Chronicles** (Sub-project B/E — player client polish).
 > Goal: academic / learning project — full, cohesive player-facing UI from authentication through the game walkthrough, in a **dark fantasy tome** aesthetic.
 > Date: 2026-06-08.
 > Branch: continues on `feature/c1-framework-gen`.
