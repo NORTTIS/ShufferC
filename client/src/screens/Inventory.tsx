@@ -19,7 +19,7 @@ export function Inventory({
   return (
     <Screen>
       <Heading level="title">Equipment</Heading>
-      <StatRow stats={stats} />
+      <StatRow stats={stats} full />
 
       <Label>Equipped</Label>
       {Object.entries(equipped).map(([slot, id]) => {
