@@ -7,18 +7,25 @@ import { createFakeProvider, AIProvider } from './ai/provider';
 import { createAuth } from './auth';
 import { BACKGROUNDS } from '../shared/backgrounds';
 import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
+import { createMemoryNovelStore } from './rag/novelStore';
+import { createFakeEmbedder, EmbeddingProvider } from './rag/embeddingProvider';
 
 const ADMIN = { email: 'admin@test', password: 'pw' };
 
-function app(provider: AIProvider = createFakeProvider([])) {
+function app(
+  provider: AIProvider = createFakeProvider([]),
+  embedder: EmbeddingProvider = createFakeEmbedder(),
+) {
   const routes = createMemoryRouteStore([structuredClone(SAMPLE_BUNDLE)]);
   const session = createGameSession(createMemoryStore(), {
     backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, routes,
   });
+  const { novels, embeddings } = createMemoryNovelStore();
   return createApp(session, {
     provider, routes,
     registries: { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB },
     auth: createAuth(ADMIN),
+    novels, embeddings, embedder,
   });
 }
 
@@ -182,5 +189,65 @@ describe('Admin REST + AI route e2e', () => {
     const t = await token(a);
     const res = await request(a).post('/admin/routes/ghost/publish').set('Authorization', `Bearer ${t}`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('Admin novels + RAG', () => {
+  function genBundle() {
+    const b = structuredClone(SAMPLE_BUNDLE);
+    b.route.id = 'rag-route-1';
+    b.route.title = 'From Novel';
+    b.route.status = 'draft';
+    return { route: b.route, nodes: Object.values(b.nodes) };
+  }
+
+  it('POST /admin/novels ingests a novel and returns id + chunkCount', async () => {
+    const a = app();
+    const t = await token(a);
+    const res = await request(a).post('/admin/novels').set('Authorization', `Bearer ${t}`)
+      .send({ title: 'Test Novel', text: 'once upon a time '.repeat(200) });
+    expect(res.status).toBe(200);
+    expect(typeof res.body.novelId).toBe('string');
+    expect(res.body.chunkCount).toBeGreaterThan(0);
+  });
+
+  it('POST /admin/novels without title/text returns 400', async () => {
+    const a = app();
+    const t = await token(a);
+    const res = await request(a).post('/admin/novels').set('Authorization', `Bearer ${t}`).send({ title: 'x' });
+    expect(res.status).toBe(400);
+  });
+
+  it('GET then DELETE /admin/novels/:id', async () => {
+    const a = app();
+    const t = await token(a);
+    const auth = { Authorization: `Bearer ${t}` };
+    const created = await request(a).post('/admin/novels').set(auth).send({ title: 'N', text: 'hello world' });
+    const id = created.body.novelId as string;
+    expect((await request(a).get(`/admin/novels/${id}`).set(auth)).status).toBe(200);
+    expect((await request(a).delete(`/admin/novels/${id}`).set(auth)).status).toBe(204);
+    expect((await request(a).get(`/admin/novels/${id}`).set(auth)).status).toBe(404);
+  });
+
+  it('POST /admin/routes/generate with novelId grounds generation and tags sourceNovelId', async () => {
+    const a = app(createFakeProvider([genBundle()]));
+    const t = await token(a);
+    const auth = { Authorization: `Bearer ${t}` };
+    const novel = await request(a).post('/admin/novels').set(auth).send({ title: 'N', text: 'a dark tower rose' });
+    const novelId = novel.body.novelId as string;
+
+    const gen = await request(a).post('/admin/routes/generate').set(auth)
+      .send({ novelId, title: 'From Novel' });
+    expect(gen.status).toBe(200);
+    expect(gen.body.routeId).toBe('rag-route-1');
+    expect(gen.body.bundle.route.sourceNovelId).toBe(novelId);
+  });
+
+  it('POST /admin/novels returns 503 when the embedder is unavailable', async () => {
+    const offline: EmbeddingProvider = { available: false, async embed() { throw new Error('x'); } };
+    const a = app(createFakeProvider([]), offline);
+    const t = await token(a);
+    const res = await request(a).post('/admin/novels').set('Authorization', `Bearer ${t}`).send({ title: 'N', text: 'x' });
+    expect(res.status).toBe(503);
   });
 });

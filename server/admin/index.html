@@ -13,7 +13,7 @@
     main { max-width:880px; margin:0 auto; padding:24px; }
     .card { background:var(--card); border:1px solid #2a2e3a; border-radius:10px; padding:18px; margin-bottom:18px; }
     label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
-    input, textarea { width:100%; padding:9px 11px; background:#0c0e14; color:var(--fg); border:1px solid #2a2e3a; border-radius:6px; font:inherit; }
+    input, textarea, select { width:100%; padding:9px 11px; background:#0c0e14; color:var(--fg); border:1px solid #2a2e3a; border-radius:6px; font:inherit; }
     textarea { min-height:140px; resize:vertical; }
     button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 16px; font:inherit; cursor:pointer; }
     button.secondary { background:#2a2e3a; }
@@ -53,12 +53,32 @@
       </section>
 
       <section class="card">
+        <h2 style="margin-top:0;font-size:15px;">Novels (RAG source)</h2>
+        <label>Title</label>
+        <input id="novelTitle" placeholder="Moby Dick" />
+        <label>Full text</label>
+        <textarea id="novelText" placeholder="Paste the novel / source text. It is chunked and embedded into pgvector."></textarea>
+        <div style="margin-top:14px;"><button id="novelBtn">Upload &amp; embed</button></div>
+        <div id="novelMsg" class="msg"></div>
+        <table>
+          <thead><tr><th>ID</th><th>Title</th><th>Chunks</th><th>Status</th><th></th></tr></thead>
+          <tbody id="novelsBody"></tbody>
+        </table>
+      </section>
+
+      <section class="card">
         <h2 style="margin-top:0;font-size:15px;">Generate a route</h2>
         <div class="row">
           <div><label>Title</label><input id="title" placeholder="The Bridge" /></div>
           <div><label>Node count</label><input id="nodeCount" type="number" value="4" min="3" max="8" /></div>
         </div>
-        <label>Source text (novel excerpt)</label>
+        <label>Ground in a novel (optional — RAG)</label>
+        <select id="novelSelect">
+          <option value="">— none: use raw source text below —</option>
+        </select>
+        <label>Retrieval query (optional; defaults to the title)</label>
+        <input id="ragQuery" placeholder="e.g. the hero's first battle" />
+        <label>Source text (used only when no novel is selected)</label>
         <textarea id="contextText" placeholder="Paste a few paragraphs of source material…"></textarea>
         <div style="margin-top:14px;"><button id="genBtn">Generate</button></div>
         <div id="genMsg" class="msg"></div>
@@ -114,7 +134,7 @@
         token = body.token;
         localStorage.setItem(TOKEN_KEY, token);
         showConsole(true);
-        await Promise.all([loadStatus(), loadRoutes()]);
+        await Promise.all([loadStatus(), loadRoutes(), loadNovels()]);
       } catch (e) {
         $('loginMsg').textContent = e.status === 401 ? 'Invalid credentials.' : ('Login failed: ' + e.message);
       }
@@ -168,19 +188,76 @@
       await loadRoutes();
     }
 
+    async function loadNovels() {
+      const tbody = $('novelsBody'); tbody.innerHTML = '';
+      const sel = $('novelSelect');
+      sel.innerHTML = '<option value="">— none: use raw source text below —</option>';
+      let rows = [];
+      try { rows = await api('/admin/novels', { headers: authHeaders() }); }
+      catch (e) { $('novelMsg').className = 'msg err'; $('novelMsg').textContent = 'Could not load novels: ' + e.message; return; }
+      for (const n of rows) {
+        const tr = document.createElement('tr');
+        for (const val of [n.id, n.title, n.chunkCount, n.status]) {
+          const cell = document.createElement('td'); cell.textContent = val; tr.appendChild(cell);
+        }
+        const td = document.createElement('td');
+        const del = document.createElement('button');
+        del.className = 'secondary'; del.textContent = 'Delete';
+        del.onclick = () => deleteNovel(n.id);
+        td.appendChild(del); tr.appendChild(td); tbody.appendChild(tr);
+
+        const opt = document.createElement('option');
+        opt.value = n.id; opt.textContent = n.title + ' (' + n.chunkCount + ' chunks)';
+        sel.appendChild(opt);
+      }
+    }
+
+    async function uploadNovel() {
+      const msg = $('novelMsg');
+      msg.className = 'msg'; msg.textContent = 'Uploading & embedding…';
+      $('novelBtn').disabled = true;
+      try {
+        const body = await api('/admin/novels', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ title: $('novelTitle').value, text: $('novelText').value }),
+        });
+        msg.className = 'msg ok';
+        msg.textContent = 'Embedded → ' + body.chunkCount + ' chunks (id ' + body.novelId + ')';
+        $('novelTitle').value = ''; $('novelText').value = '';
+        await loadNovels();
+      } catch (e) {
+        msg.className = 'msg err';
+        if (e.status === 503) msg.textContent = 'Embedder unavailable — set GEMINI_API_KEY in .env and restart the server.';
+        else if (e.status === 400) msg.textContent = 'Title and text are both required.';
+        else msg.textContent = 'Error: ' + e.message;
+      } finally {
+        $('novelBtn').disabled = false;
+      }
+    }
+
+    async function deleteNovel(id) {
+      await api('/admin/novels/' + id, { method: 'DELETE', headers: authHeaders() });
+      await loadNovels();
+    }
+
     async function doGenerate() {
       const msg = $('genMsg'); const out = $('genOut');
       msg.textContent = 'Generating…'; msg.className = 'msg'; out.classList.add('hidden');
       $('genBtn').disabled = true;
       try {
+        const novelId = $('novelSelect').value;
+        const payload = { title: $('title').value, nodeCount: Number($('nodeCount').value) || 4 };
+        if (novelId) {
+          payload.novelId = novelId;
+          if ($('ragQuery').value) payload.query = $('ragQuery').value;
+        } else {
+          payload.contextText = $('contextText').value;
+        }
         const body = await api('/admin/routes/generate', {
           method: 'POST',
           headers: authHeaders(),
-          body: JSON.stringify({
-            title: $('title').value,
-            nodeCount: Number($('nodeCount').value) || 4,
-            contextText: $('contextText').value,
-          }),
+          body: JSON.stringify(payload),
         });
         msg.className = 'msg ok';
         msg.textContent = 'Created draft route: ' + body.routeId;
@@ -206,9 +283,10 @@
     $('loginBtn').onclick = doLogin;
     $('logout').onclick = logout;
     $('genBtn').onclick = doGenerate;
+    $('novelBtn').onclick = uploadNovel;
 
     // Boot: if we already hold a token, try the console; a stale token bounces back to login on the first 401.
-    if (token) { showConsole(true); loadStatus(); loadRoutes().catch(() => {}); }
+    if (token) { showConsole(true); loadStatus(); loadRoutes().catch(() => {}); loadNovels().catch(() => {}); }
     else { showConsole(false); }
   </script>
 </body>
