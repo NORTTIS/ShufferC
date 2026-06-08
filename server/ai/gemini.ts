@@ -46,7 +46,7 @@ export function sanitizeForGemini(node: unknown): unknown {
 }
 
 /**
- * Real Gemini provider. Uses the Pro model for framework generation with JSON
+ * Real Gemini provider. Uses the Pro model by default (framework generation); callers pass `{ model: 'flash' }` for live event-gen. JSON
  * response mode + the passed responseSchema (sanitized to Gemini's subset). When
  * no API key is configured the provider reports `available:false` and never touches
  * the network (so the server boots and tests run without a key). Smoke-tested
@@ -58,10 +58,11 @@ export function createGeminiProvider(cfg: GeminiConfig): AIProvider {
 
   return {
     available,
-    async generateStructured(prompt: string, jsonSchema: object): Promise<unknown> {
+    async generateStructured(prompt: string, jsonSchema: object, opts?: { model?: 'pro' | 'flash' }): Promise<unknown> {
       if (!client) throw new Error('Gemini provider unavailable: no API key');
+      const modelName = opts?.model === 'flash' ? cfg.flashModel : cfg.proModel;
       const model = client.getGenerativeModel({
-        model: cfg.proModel,
+        model: modelName,
         generationConfig: {
           responseMimeType: 'application/json',
           // Strip JSON-Schema keywords Gemini doesn't accept; cast through unknown
