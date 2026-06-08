@@ -25,6 +25,20 @@ export function sanitizeForGemini(node: unknown): unknown {
       if (UNSUPPORTED_KEYS.has(key)) continue;
       out[key] = sanitizeForGemini(value);
     }
+    // Reconcile `required` against `properties`. zod renders an enum-keyed record
+    // (e.g. statDelta) with its keys in additionalProperties/propertyNames but
+    // still lists them in `required`. Once we strip those, the required entries
+    // point at properties that don't exist and Gemini rejects them. Drop any
+    // required entry without a matching property (and drop `required` if empty).
+    if (Array.isArray(out.required)) {
+      const props = out.properties && typeof out.properties === 'object'
+        ? (out.properties as Record<string, unknown>)
+        : {};
+      const propKeys = new Set(Object.keys(props));
+      const kept = (out.required as unknown[]).filter((r) => typeof r === 'string' && propKeys.has(r));
+      if (kept.length) out.required = kept;
+      else delete out.required;
+    }
     return out;
   }
   return node;

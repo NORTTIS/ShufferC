@@ -20,6 +20,37 @@ describe('sanitizeForGemini', () => {
     }
   });
 
+  it('leaves no required entry pointing at a missing property (real schema)', () => {
+    // Guards the live 400 from statDelta (an enum-keyed record): required listed
+    // keys that lived in additionalProperties/propertyNames before stripping.
+    const sanitized = sanitizeForGemini(GEN_BUNDLE_JSON_SCHEMA);
+    const offenders: string[] = [];
+    const walk = (node: unknown) => {
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      if (node && typeof node === 'object') {
+        const obj = node as Record<string, unknown>;
+        if (Array.isArray(obj.required)) {
+          const props = obj.properties && typeof obj.properties === 'object'
+            ? Object.keys(obj.properties as Record<string, unknown>) : [];
+          for (const r of obj.required) {
+            if (typeof r === 'string' && !props.includes(r)) offenders.push(r);
+          }
+        }
+        Object.values(obj).forEach(walk);
+      }
+    };
+    walk(sanitized);
+    expect(offenders).toEqual([]);
+  });
+
+  it('drops `required` entirely when an object has no properties', () => {
+    const sanitized = sanitizeForGemini({
+      type: 'object', additionalProperties: { type: 'number' }, propertyNames: { enum: ['a', 'b'] }, required: ['a', 'b'],
+    }) as Record<string, any>;
+    expect(sanitized.required).toBeUndefined();
+    expect(sanitized.additionalProperties).toBeUndefined();
+  });
+
   it('preserves supported structure (type/properties/items/enum)', () => {
     const sanitized = sanitizeForGemini({
       $schema: 'x', type: 'object', additionalProperties: false,
