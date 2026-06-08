@@ -43,6 +43,12 @@ export function useGameSession() {
     return { sessionId: res.sessionId, view: res, screen: 'story' as Screen };
   }), [run]);
 
+  const continueRoute = useCallback(() => run(async () => {
+    const id = state.sessionId!;
+    const res = await gameApi.continueRoute(id);
+    return { view: res, lastChoice: null, screen: 'story' as Screen };
+  }), [run, state.sessionId]);
+
   const screenAfter = (v: SessionView): Screen =>
     v.ending ? 'ending' : v.node.choices.length === 0 ? 'ending' : 'story';
 
@@ -79,5 +85,5 @@ export function useGameSession() {
     setState((s) => ({ ...s, screen }));
   }, []);
 
-  return { state, start, choose, enterCombat, fight, equip, goTo };
+  return { state, start, choose, enterCombat, fight, equip, goTo, continueRoute };
 }
