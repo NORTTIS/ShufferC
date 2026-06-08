@@ -75,6 +75,10 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
     session.applyChoice(req.params.id as string, req.body?.choiceId, req.body?.skillPriority),
   ));
 
+  app.post('/sessions/:id/continue', wrap((req) =>
+    session.continueToNextRoute(req.params.id as string),
+  ));
+
   app.post('/sessions/:id/equip', wrap((req) =>
     session.equip(req.params.id as string, req.body?.slot, req.body?.itemId ?? null),
   ));

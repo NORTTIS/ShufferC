@@ -70,6 +70,15 @@ describe('REST API', () => {
     expect(res.status).toBe(400);
   });
 
+  it('POST /sessions/:id/continue returns 409 when no further route remains', async () => {
+    const a = app(); // default deps: a single published route, consumed by newGame
+    const created = await request(a).post('/sessions').send({ backgroundId: 'rogue' });
+    const id = created.body.sessionId as string;
+    const res = await request(a).post(`/sessions/${id}/continue`).send();
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/no more routes/i);
+  });
+
   it('POST /sessions/:id/equip recomputes effective stats', async () => {
     const a = app();
     const created = await request(a).post('/sessions').send({ backgroundId: 'rogue' });
