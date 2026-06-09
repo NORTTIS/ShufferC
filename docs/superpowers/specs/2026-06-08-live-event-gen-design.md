@@ -47,7 +47,7 @@ server/
     memoryRouteStore.ts # MODIFY: implement setNodeSource
     pgRouteStore.ts   # MODIFY: implement setNodeSource
   session.ts          # MODIFY: enrich live nodes; materialize overlay into served node
-  api.ts              # MODIFY: PATCH /admin/routes/:id/nodes/:nodeId/source
+  api.ts              # MODIFY: POST /admin/routes/:id/nodes/:nodeId/source
   index.ts            # MODIFY: inject provider + embedder + embeddings into SessionDeps
   admin/index.html    # MODIFY: per-node live/pregen toggle in route-detail view
 ```
