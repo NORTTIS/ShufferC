@@ -19,10 +19,16 @@ export const ITEM_DB: Record<string, Item> = {
     onEquip: [{ id: 'regen', kind: 'hot', duration: 99, magnitude: 1 }], storyTags: ['mystic'], sprite: 'item.ring',
   },
   torch: { id: 'torch', name: 'Torch', slot: 'quest', kind: 'gear', storyTags: ['dungeon'], sprite: 'item.torch' },
+  healPotion: { id: 'healPotion', name: 'Healing Potion', slot: 'scroll', kind: 'consumable', cost: 10, onUse: [{ id: 'heal', kind: 'hot', duration: 0, magnitude: 15 }], storyTags: [], sprite: 'item.potion' },
+  regenScroll: { id: 'regenScroll', name: 'Scroll of Regen', slot: 'scroll', kind: 'consumable', cost: 18, onUse: [{ id: 'regen', kind: 'hot', duration: 3, magnitude: 3 }], storyTags: [], sprite: 'item.scroll' },
 };
 
 export const ENEMY_DB: Record<string, Enemy> = {
-  goblin: { id: 'goblin', name: 'Goblin', stats: { str: 6, dex: 6, int: 2, wis: 2, cha: 2, con: 3 }, hp: 18, skillPriority: ['slash'], sprite: 'enemy.goblin' },
+  goblin: {
+    id: 'goblin', name: 'Goblin', stats: { str: 6, dex: 6, int: 2, wis: 2, cha: 2, con: 3 }, hp: 18,
+    skillPriority: ['slash'], sprite: 'enemy.goblin',
+    reward: { gold: [8, 14], xp: 25, drops: [{ itemId: 'healPotion', chance: 1 }], reputationDelta: { hero: 1 } },
+  },
 };
 
 export const SAMPLE_CHARACTER: CharacterState = {
@@ -42,7 +48,11 @@ export const SAMPLE_NODES: Record<string, StoryNode> = {
     ],
     combat: { enemyIds: ['goblin'] },
   },
-  n2: { id: 'n2', source: 'pregen', prose: 'The goblin lies defeated.', choices: [{ id: 'end', text: 'Continue', nextNodeId: 'n3' }] },
+  n2: {
+    id: 'n2', source: 'pregen', prose: 'The goblin lies defeated. A travelling merchant nods at your loot.',
+    choices: [{ id: 'end', text: 'Continue', nextNodeId: 'n3' }],
+    merchant: { stock: [{ itemId: 'healPotion' }, { itemId: 'regenScroll' }, { itemId: 'ringOfRegen', price: 25 }] },
+  },
   n3: { id: 'n3', source: 'pregen', prose: 'You enter the keep. The end of the demo route.', choices: [] },
 };
 
