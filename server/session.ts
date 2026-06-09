@@ -167,8 +167,10 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         save.liveNodes = { ...(save.liveNodes ?? {}), [nodeId]: overlay };
         await store.put(id, save);
       }
-    } catch {
-      // swallow — serve the stub text
+    } catch (err) {
+      // Never break play on enrich failure — serve the stub text. Log so a
+      // misconfigured embedder / failing key / DB write is observable in ops.
+      console.warn(`live enrich failed for node ${nodeId}: ${err instanceof Error ? err.message : err}`);
     }
   }
 
