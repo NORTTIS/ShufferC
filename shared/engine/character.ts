@@ -1,4 +1,4 @@
-import { CharacterState, CombatActor, Enemy, Item, Skill, Stats } from '../types';
+import { CharacterState, CombatActor, Enemy, Item, Skill, Stats, StatusEffect } from '../types';
 import { STAT_KEYS, BASE_HP, HP_PER_CON } from '../constants';
 import { applyEffect } from './effects';
 
@@ -28,28 +28,45 @@ function collectSkillBook(ids: string[], skillDb: Record<string, Skill>): Record
   return book;
 }
 
+export interface BuildPlayerOptions {
+  startHp?: number;             // persistent currentHp; clamped to [0, maxHp]
+  extraBuffs?: StatusEffect[];  // pending buffs applied at combat start
+}
+
 export function buildPlayerActor(
   character: CharacterState,
   itemDb: Record<string, Item>,
   skillDb: Record<string, Skill>,
+  opts: BuildPlayerOptions = {},
 ): CombatActor {
   const stats = effectiveStats(character, itemDb);
   const maxHp = deriveMaxHp(stats);
+
+  // Equipped items may grant skills; append after the character's own priority.
+  const granted: string[] = [];
+  for (const itemId of Object.values(character.equipped)) {
+    if (!itemId) continue;
+    for (const sid of itemDb[itemId]?.grantsSkills ?? []) granted.push(sid);
+  }
+  const priority = [...character.skillPriority, ...granted.filter((s) => !character.skillPriority.includes(s))];
+
+  const startHp = opts.startHp ?? maxHp;
   const actor: CombatActor = {
     id: 'player',
     name: 'Hero',
     stats,
-    hp: maxHp,
+    hp: Math.max(0, Math.min(maxHp, startHp)),
     maxHp,
     statuses: [],
-    skillPriority: [...character.skillPriority],
-    skillBook: collectSkillBook(character.skillPriority, skillDb),
+    skillPriority: priority,
+    skillBook: collectSkillBook(priority, skillDb),
   };
   for (const itemId of Object.values(character.equipped)) {
     if (!itemId) continue;
     const item = itemDb[itemId];
     for (const eff of item?.onEquip ?? []) applyEffect(actor, eff);
   }
+  for (const eff of opts.extraBuffs ?? []) applyEffect(actor, eff);
   return actor;
 }
 
