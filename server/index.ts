@@ -31,6 +31,7 @@ const embedder = createGeminiEmbedder(config.gemini); // available:false without
 
 const session = createGameSession(saves, {
   backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, routes,
+  provider, embedder, embeddings,
 });
 
 const app = createApp(session, {
