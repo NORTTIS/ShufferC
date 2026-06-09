@@ -1,53 +1,29 @@
-import { EFFECT_REGISTRY } from './registry';
-import { CombatActor, StatusEffect } from '../types';
+import { applyArchetype, tickArchetype, expireArchetype } from './registry';
+import { CombatActor, EffectTemplate, StatusEffect } from '../types';
 
 function actor(): CombatActor {
-  return {
-    id: 'a', name: 'A',
-    stats: { str: 10, dex: 10, int: 10, wis: 10, cha: 10, con: 10 },
-    hp: 20, maxHp: 30, statuses: [], skillPriority: [], skillBook: {},
-  };
+  return { id: 'a', name: 'A', stats: { str: 5, con: 4 }, hp: 10, maxHp: 10, statuses: [], skillPriority: [], skillBook: {} };
 }
+const tpl = (t: Partial<EffectTemplate>): EffectTemplate =>
+  ({ id: 'x', name: 'X', archetype: 'dot', kind: 'dot', builtin: false, ...t });
+const inst = (e: Partial<StatusEffect>): StatusEffect => ({ id: 'x', kind: 'dot', duration: 1, ...e });
 
-describe('EFFECT_REGISTRY', () => {
-  it('defines the six baseline effects with correct kinds', () => {
-    expect(EFFECT_REGISTRY.freeze.kind).toBe('control');
-    expect(EFFECT_REGISTRY.stun.kind).toBe('control');
-    expect(EFFECT_REGISTRY.poison.kind).toBe('dot');
-    expect(EFFECT_REGISTRY.regen.kind).toBe('hot');
-    expect(EFFECT_REGISTRY.attack_buff.kind).toBe('buff');
-    expect(EFFECT_REGISTRY.defense_down.kind).toBe('debuff');
-  });
-
-  it('poison.tick subtracts magnitude and clamps at 0', () => {
-    const a = actor(); a.hp = 3;
-    const e: StatusEffect = { id: 'poison', kind: 'dot', duration: 2, magnitude: 5 };
-    EFFECT_REGISTRY.poison.tick!(a, e);
-    expect(a.hp).toBe(0);
-  });
-
-  it('regen.tick adds magnitude and clamps at maxHp', () => {
-    const a = actor(); a.hp = 28;
-    const e: StatusEffect = { id: 'regen', kind: 'hot', duration: 2, magnitude: 5 };
-    EFFECT_REGISTRY.regen.tick!(a, e);
-    expect(a.hp).toBe(30);
-  });
-
-  it('attack_buff raises str on apply and restores on expire', () => {
+describe('effect archetypes', () => {
+  it('dot tick subtracts magnitude (instance overrides template)', () => {
     const a = actor();
-    const e: StatusEffect = { id: 'attack_buff', kind: 'buff', duration: 2, magnitude: 4 };
-    EFFECT_REGISTRY.attack_buff.apply!(a, e);
-    expect(a.stats.str).toBe(14);
-    EFFECT_REGISTRY.attack_buff.onExpire!(a, e);
-    expect(a.stats.str).toBe(10);
+    tickArchetype(a, inst({ magnitude: 3 }), tpl({ archetype: 'dot', magnitude: 1 }));
+    expect(a.hp).toBe(7);
   });
-
-  it('defense_down lowers con on apply and restores on expire', () => {
+  it('hot instant applies once at apply-time and clamps to maxHp', () => {
+    const a = actor(); a.hp = 2;
+    applyArchetype(a, inst({ magnitude: 15, duration: 0 }), tpl({ archetype: 'hot', kind: 'hot', instant: true }));
+    expect(a.hp).toBe(10);
+  });
+  it('statMod adds on apply and reverses on expire', () => {
     const a = actor();
-    const e: StatusEffect = { id: 'defense_down', kind: 'debuff', duration: 2, magnitude: 3 };
-    EFFECT_REGISTRY.defense_down.apply!(a, e);
-    expect(a.stats.con).toBe(7);
-    EFFECT_REGISTRY.defense_down.onExpire!(a, e);
-    expect(a.stats.con).toBe(10);
+    const t = tpl({ archetype: 'statMod', kind: 'buff', stat: 'str', magnitude: 1 });
+    const e = inst({ magnitude: 2 });
+    applyArchetype(a, e, t); expect(a.stats.str).toBe(7);
+    expireArchetype(a, e, t); expect(a.stats.str).toBe(5);
   });
 });
