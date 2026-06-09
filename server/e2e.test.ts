@@ -1,6 +1,9 @@
 import { createGameSession } from './session';
 import { createMemoryStore } from './store/memoryStore';
 import { serialize, deserialize } from '../shared/engine/save';
+import { createMemoryRouteStore } from './store/memoryRouteStore';
+import { ITEM_DB, SKILL_DB, ENEMY_DB } from '../shared/fixtures';
+import { BACKGROUNDS } from '../shared/backgrounds';
 
 describe('server e2e (hardcoded route)', () => {
   it('rogue sneaks past and reaches the keep', async () => {
@@ -41,5 +44,23 @@ describe('combat rewards', () => {
     expect(res.save.xp).toBe(25);
     expect(res.reward).toBeDefined();
     expect(res.save.vitals.currentHp).toBeLessThanOrEqual(startHp);
+  });
+});
+
+function shopRouteDeps() {
+  const bundle = {
+    route: { id: 'shop-rt', title: 'Shop', sourceNovelId: 'x', acts: [{ id: 'a', title: 'A', nodeIds: ['s1'] }], itemPool: [], enemyPool: [], endings: [], status: 'published' as const },
+    nodes: { s1: { id: 's1', source: 'pregen' as const, prose: 'A merchant waits.', choices: [], merchant: { stock: [{ itemId: 'dagger', price: 10 }] } } },
+  };
+  return { backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, routes: createMemoryRouteStore([bundle]), random: () => 0 };
+}
+
+describe('shop', () => {
+  it('lists stock for the current node and rejects a buy without enough gold', async () => {
+    const s = createGameSession(createMemoryStore(), shopRouteDeps());
+    const { sessionId } = await s.newGame('rogue', 'shop-rt');
+    const shop = await s.getShop(sessionId);
+    expect(shop.stock).toEqual([{ item: ITEM_DB.dagger, price: 10 }]);
+    await expect(s.buy(sessionId, 'dagger')).rejects.toMatchObject({ status: 400 });
   });
 });

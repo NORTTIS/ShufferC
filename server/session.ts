@@ -69,6 +69,9 @@ export interface ChoiceView extends SessionView {
   reward?: Rewards;
 }
 
+export interface ShopView { stock: { item: Item; price: number }[] }
+export interface BuyView { save: SaveState; effectiveStats: Stats }
+
 export interface GameSession {
   listBackgrounds(): Background[];
   newGame(backgroundId: string, routeId?: string): Promise<SessionView & { sessionId: string }>;
@@ -76,6 +79,8 @@ export interface GameSession {
   continueToNextRoute(id: string): Promise<SessionView>;
   applyChoice(id: string, choiceId: string, skillPriority?: string[]): Promise<ChoiceView>;
   equip(id: string, slot: string, itemId: string | null): Promise<{ save: SaveState; effectiveStats: Stats }>;
+  getShop(id: string): Promise<ShopView>;
+  buy(id: string, itemId: string): Promise<BuyView>;
 }
 
 export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_DEPS): GameSession {
@@ -342,6 +347,38 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         }
         save.character.equipped[slot as EquipSlot] = itemId;
       }
+      await store.put(id, save);
+      const stored = structuredClone(save);
+      return { save: stored, effectiveStats: effectiveStats(stored.character, deps.itemDb) };
+    },
+
+    async getShop(id) {
+      const save = await load(id);
+      const bundle = await loadBundle(save.routeId);
+      const node = bundle.nodes[save.currentNodeId];
+      if (!node?.merchant) throw new GameError('No merchant at this node', 400);
+      const stock = node.merchant.stock.map((s) => {
+        const item = deps.itemDb[s.itemId];
+        if (!item) throw new GameError(`Item ${s.itemId} not found`, 500);
+        return { item, price: s.price ?? item.cost ?? 0 };
+      });
+      return { stock };
+    },
+
+    async buy(id, itemId) {
+      const save = await load(id);
+      const bundle = await loadBundle(save.routeId);
+      const node = bundle.nodes[save.currentNodeId];
+      if (!node?.merchant) throw new GameError('No merchant at this node', 400);
+      const entry = node.merchant.stock.find((s) => s.itemId === itemId);
+      if (!entry) throw new GameError(`Item ${itemId} not sold here`, 400);
+      const item = deps.itemDb[itemId];
+      if (!item) throw new GameError(`Item ${itemId} not found`, 500);
+      const price = entry.price ?? item.cost ?? 0;
+      if (save.gold < price) throw new GameError('Not enough gold', 400);
+      save.gold -= price;
+      if (item.kind === 'consumable') save.consumables[itemId] = (save.consumables[itemId] ?? 0) + 1;
+      else save.character.inventory.push(itemId);
       await store.put(id, save);
       const stored = structuredClone(save);
       return { save: stored, effectiveStats: effectiveStats(stored.character, deps.itemDb) };
