@@ -90,6 +90,16 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
     session.equip(req.params.id as string, req.body?.slot, req.body?.itemId ?? null),
   ));
 
+  app.get('/sessions/:id/shop', wrap((req) => session.getShop(req.params.id as string)));
+
+  app.post('/sessions/:id/buy', wrap((req) =>
+    session.buy(req.params.id as string, req.body?.itemId),
+  ));
+
+  app.post('/sessions/:id/use', wrap((req) =>
+    session.useItem(req.params.id as string, req.body?.itemId),
+  ));
+
   // ── Admin data endpoints (auth required; unauthenticated → 401) ───────
   app.get('/admin/status', requireAuth(admin.auth), wrap(() => ({ providerAvailable: admin.provider.available })));
 
@@ -157,6 +167,26 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
     const bundle = await admin.routes.get(id);
     if (!bundle) throw new GameError(`Route ${id} not found`, 404);
     await admin.routes.publish(id);
+    res.status(204).end();
+    return undefined;
+  }));
+
+  app.post('/admin/routes/:id/nodes/:nodeId/merchant', wrap(async (req, res) => {
+    const id = req.params.id as string;
+    const nodeId = req.params.nodeId as string;
+    const stock = req.body?.stock;
+    if (stock !== null && !Array.isArray(stock)) {
+      throw new GameError('stock must be an array or null', 400);
+    }
+    for (const entry of stock ?? []) {
+      if (!admin.registries.itemDb[entry?.itemId]) {
+        throw new GameError(`Unknown item ${entry?.itemId}`, 400);
+      }
+    }
+    const bundle = await admin.routes.get(id);
+    if (!bundle) throw new GameError(`Route ${id} not found`, 404);
+    if (!bundle.nodes[nodeId]) throw new GameError(`Node ${nodeId} not found in route ${id}`, 404);
+    await admin.routes.setMerchant(id, nodeId, stock === null ? null : { stock });
     res.status(204).end();
     return undefined;
   }));

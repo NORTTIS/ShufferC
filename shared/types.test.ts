@@ -22,6 +22,7 @@ describe('types', () => {
       character: { background: 'rogue', baseStats: stats, inventory: [], equipped: {}, skillPriority: [] },
       reputation: { hero: 0, villain: 0, factions: {} },
       flags: {}, choiceLog: [], currentNodeId: 'n1', seed: 42,
+      gold: 0, xp: 0, level: 1, consumables: {}, vitals: { currentHp: 40, pendingBuffs: [] },
     };
     expect(actor.maxHp).toBe(25);
     expect(save.seed).toBe(42);

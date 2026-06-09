@@ -6,7 +6,7 @@ import { useResponsive } from '../hooks/useResponsive';
 import type { SessionView, ChoiceView } from '../services/api';
 
 export function Story({
-  view, lastChoice, busy, onChoose, onFight, onInventory,
+  view, lastChoice, busy, onChoose, onFight, onInventory, onShop,
 }: {
   view: SessionView;
   lastChoice: ChoiceView | null;
@@ -14,6 +14,7 @@ export function Story({
   onChoose: (choiceId: string) => void;
   onFight: (choiceId: string) => void;
   onInventory: () => void;
+  onShop: () => void;
 }) {
   const layout = useResponsive();
   const nodeHasCombat = !!view.node.combat;
@@ -38,6 +39,13 @@ export function Story({
         />
       )}
 
+      {lastChoice?.reward && (
+        <Tag
+          text={`Spoils · +${lastChoice.reward.gold}g · +${lastChoice.reward.xp} xp${lastChoice.reward.itemIds.length ? ' · ' + lastChoice.reward.itemIds.join(', ') : ''}`}
+          tone="success"
+        />
+      )}
+
       {view.node.choices.map((c) => {
         const isFight = nodeHasCombat && !c.skillCheck;
         const label = `${c.text}${c.skillCheck ? ` (${c.skillCheck.stat.toUpperCase()} check)` : ''}${isFight ? ' ⚔' : ''}`;
@@ -55,6 +63,12 @@ export function Story({
       <Card onPress={busy ? undefined : onInventory}>
         <Label>Inventory / Equipment</Label>
       </Card>
+
+      {view.node.merchant && (
+        <Card onPress={busy ? undefined : onShop}>
+          <Label>Visit merchant</Label>
+        </Card>
+      )}
     </View>
   );
 

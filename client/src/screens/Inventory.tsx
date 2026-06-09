@@ -6,11 +6,12 @@ import { sprite } from '../assets';
 import type { SessionView } from '../services/api';
 
 export function Inventory({
-  view, busy, onEquip, onBack,
+  view, busy, onEquip, onUse, onBack,
 }: {
   view: SessionView;
   busy: boolean;
   onEquip: (slot: string, itemId: string | null) => void;
+  onUse: (itemId: string) => void;
   onBack: () => void;
 }) {
   const equipped = view.save.character.equipped;
@@ -40,6 +41,17 @@ export function Inventory({
           <Text style={styles.item}>{sprite('item.' + id)} {id}</Text>
         </Card>
       ))}
+
+      <Label>Consumables</Label>
+      {Object.entries(view.save.consumables).map(([id, qty]) => (
+        <Card key={id}>
+          <View style={styles.row}>
+            <Text style={styles.item}>{sprite('item.' + id)} {id} ×{qty}</Text>
+            <Button label="Use" variant="ghost" disabled={busy} onPress={() => onUse(id)} />
+          </View>
+        </Card>
+      ))}
+      <Label>HP: {view.save.vitals.currentHp}</Label>
 
       <Button label="Back to story" variant="ghost" disabled={busy} onPress={onBack} />
     </Screen>

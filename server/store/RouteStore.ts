@@ -1,4 +1,4 @@
-import { RouteBundle } from '../../shared/types';
+import { RouteBundle, StoryNode } from '../../shared/types';
 
 export interface RouteSummary { id: string; title: string; status: 'draft' | 'published'; }
 
@@ -8,4 +8,5 @@ export interface RouteStore {
   list(): Promise<RouteSummary[]>;
   publish(id: string): Promise<void>;             // flips route.status → 'published'; throws if missing
   setNodeSource(routeId: string, nodeId: string, source: 'live' | 'pregen'): Promise<void>; // throws if route/node missing
+  setMerchant(routeId: string, nodeId: string, merchant: StoryNode['merchant'] | null): Promise<void>; // null clears
 }

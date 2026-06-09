@@ -36,5 +36,14 @@ export function createMemoryRouteStore(seed: RouteBundle[] = []): RouteStore {
       updated.nodes[nodeId].source = source;
       map.set(routeId, updated);
     },
+    async setMerchant(routeId, nodeId, merchant): Promise<void> {
+      const found = map.get(routeId);
+      if (!found) throw new Error(`route ${routeId} not found`);
+      const updated = structuredClone(found);
+      if (!updated.nodes[nodeId]) throw new Error(`node ${nodeId} not found in route ${routeId}`);
+      if (merchant) updated.nodes[nodeId].merchant = merchant;
+      else delete updated.nodes[nodeId].merchant;
+      map.set(routeId, updated);
+    },
   };
 }

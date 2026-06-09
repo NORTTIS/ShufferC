@@ -29,6 +29,7 @@ maybe('Postgres adapters (live DB)', () => {
       version: 1, routeId: 'r',
       character: { background: 'rogue', baseStats: { str: 1, dex: 1, int: 1, wis: 1, cha: 1, con: 1 }, inventory: [], equipped: {}, skillPriority: [] },
       reputation: { hero: 0, villain: 0, factions: {} }, flags: {}, choiceLog: [], currentNodeId: 'n1', seed: 7,
+      gold: 0, xp: 0, level: 1, consumables: {}, vitals: { currentHp: 40, pendingBuffs: [] },
     };
     const id = await store.create(sample);
     expect((await store.get(id))?.currentNodeId).toBe('n1');

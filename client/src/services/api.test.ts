@@ -27,3 +27,27 @@ describe('gameApi', () => {
     await expect(gameApi.newGame('nope')).rejects.toBeInstanceOf(ApiError);
   });
 });
+
+describe('gameApi shop/use', () => {
+  const orig = global.fetch;
+  afterEach(() => { global.fetch = orig; });
+  function ok(body: unknown) {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => body }) as unknown as typeof fetch;
+  }
+  it('getShop GETs the shop', async () => {
+    ok({ stock: [{ item: { id: 'dagger' }, price: 5 }] });
+    const res = await gameApi.getShop('s1');
+    expect(res.stock[0].price).toBe(5);
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/sessions/s1/shop'), expect.anything());
+  });
+  it('buy POSTs the itemId', async () => {
+    ok({ save: {}, effectiveStats: {} });
+    await gameApi.buy('s1', 'dagger');
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/sessions/s1/buy'), expect.objectContaining({ method: 'POST' }));
+  });
+  it('useItem POSTs the itemId', async () => {
+    ok({ save: {}, effectiveStats: {} });
+    await gameApi.useItem('s1', 'healPotion');
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/sessions/s1/use'), expect.objectContaining({ method: 'POST' }));
+  });
+});

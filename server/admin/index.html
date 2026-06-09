@@ -189,11 +189,24 @@
     function renderNodes(routeId, bundle) {
       const box = $('nodesOut'); box.classList.remove('hidden'); box.innerHTML = '';
       const h = document.createElement('h3');
-      h.style.fontSize = '13px'; h.textContent = 'Nodes — toggle live AI generation';
+      h.style.fontSize = '13px'; h.textContent = 'Nodes — live AI generation & merchant stock';
       box.appendChild(h);
+      const pool = Array.isArray(bundle.route && bundle.route.itemPool) ? bundle.route.itemPool : [];
+      if (pool.length) {
+        const hint = document.createElement('div');
+        hint.className = 'status muted';
+        hint.style.color = 'var(--muted)'; hint.style.fontSize = '12px'; hint.style.marginBottom = '8px';
+        hint.textContent = 'Route itemPool: ' + pool.join(', ');
+        box.appendChild(hint);
+      }
       for (const nid of Object.keys(bundle.nodes)) {
         const node = bundle.nodes[nid];
-        const row = document.createElement('div'); row.style.margin = '6px 0';
+        const card = document.createElement('div');
+        card.style.border = '1px solid #2a2e3a'; card.style.borderRadius = '6px';
+        card.style.padding = '10px'; card.style.margin = '8px 0';
+
+        // Source toggle row
+        const row = document.createElement('div'); row.style.margin = '0 0 8px';
         const label = document.createElement('span');
         label.textContent = nid + '  [' + node.source + ']  ';
         row.appendChild(label);
@@ -202,7 +215,74 @@
         btn.className = 'secondary'; btn.textContent = 'Mark ' + next;
         btn.onclick = () => setNodeSource(routeId, nid, next);
         row.appendChild(btn);
-        box.appendChild(row);
+        card.appendChild(row);
+
+        // Merchant editor
+        const mLabel = document.createElement('label');
+        mLabel.textContent = 'Merchant stock (one per line: itemId or itemId:price)';
+        card.appendChild(mLabel);
+        const ta = document.createElement('textarea');
+        ta.style.minHeight = '80px';
+        ta.placeholder = 'dagger\nringOfRegen:25';
+        const stock = (node.merchant && Array.isArray(node.merchant.stock)) ? node.merchant.stock : [];
+        ta.value = stock.map((s) => s.price != null ? (s.itemId + ':' + s.price) : s.itemId).join('\n');
+        card.appendChild(ta);
+        const mRow = document.createElement('div'); mRow.style.marginTop = '8px';
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save merchant';
+        saveBtn.onclick = () => setNodeMerchant(routeId, nid, ta.value);
+        mRow.appendChild(saveBtn);
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'secondary'; clearBtn.textContent = 'Clear'; clearBtn.style.marginLeft = '8px';
+        clearBtn.onclick = () => setNodeMerchant(routeId, nid, null);
+        mRow.appendChild(clearBtn);
+        card.appendChild(mRow);
+
+        box.appendChild(card);
+      }
+    }
+
+    // Parse the merchant textarea into a stock array. One entry per non-empty line:
+    // "itemId" -> { itemId }, "itemId:price" -> { itemId, price } (price must be a finite number).
+    function parseMerchantStock(text) {
+      const stock = [];
+      for (const raw of String(text).split('\n')) {
+        const line = raw.trim();
+        if (!line) continue;
+        const idx = line.indexOf(':');
+        if (idx === -1) { stock.push({ itemId: line }); continue; }
+        const itemId = line.slice(0, idx).trim();
+        const priceStr = line.slice(idx + 1).trim();
+        const price = Number(priceStr);
+        if (priceStr === '' || !Number.isFinite(price)) {
+          throw new Error('Invalid price for "' + itemId + '" (use itemId or itemId:number)');
+        }
+        stock.push({ itemId, price });
+      }
+      return stock;
+    }
+
+    async function setNodeMerchant(routeId, nodeId, text) {
+      const msg = $('nodeMsg'); msg.className = 'msg'; msg.textContent = '';
+      let stock;
+      try {
+        stock = text === null ? null : parseMerchantStock(text);
+      } catch (e) {
+        msg.className = 'msg err'; msg.textContent = e.message;
+        return;
+      }
+      try {
+        await api('/admin/routes/' + routeId + '/nodes/' + nodeId + '/merchant', {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify({ stock }),
+        });
+        msg.className = 'msg ok';
+        msg.textContent = stock === null
+          ? (nodeId + ' merchant cleared')
+          : (nodeId + ' merchant set (' + stock.length + ' item' + (stock.length === 1 ? '' : 's') + ')');
+        await viewRoute(routeId); // refresh node list + JSON
+      } catch (e) {
+        msg.className = 'msg err';
+        msg.textContent = e.status === 404 ? 'Route or node not found.' : ('Error: ' + e.message);
       }
     }
 

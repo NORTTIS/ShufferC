@@ -1,6 +1,7 @@
 import { SaveState, StoryNode } from '../types';
 import { RNG, mulberry32, rollD20, faceToMultiplier } from './dice';
 import { STAT_KEYS } from '../constants';
+import { applyRepDelta } from './reputation';
 
 export interface ChoiceResolution {
   save: SaveState;
@@ -38,14 +39,7 @@ export function resolveChoice(
       }
     }
     if (outcome.reputationDelta) {
-      const rd = outcome.reputationDelta;
-      if (rd.hero) next.reputation.hero += rd.hero;
-      if (rd.villain) next.reputation.villain += rd.villain;
-      if (rd.factions) {
-        for (const [f, v] of Object.entries(rd.factions)) {
-          next.reputation.factions[f] = (next.reputation.factions[f] ?? 0) + v;
-        }
-      }
+      applyRepDelta(next.reputation, outcome.reputationDelta);
     }
     if (outcome.addItems) next.character.inventory.push(...outcome.addItems);
     if (outcome.removeItems) {

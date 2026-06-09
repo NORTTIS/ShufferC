@@ -253,6 +253,45 @@ describe('Admin novels + RAG', () => {
   });
 });
 
+describe('shop/use routes', () => {
+  it('admin sets a merchant; requires auth', async () => {
+    const a = app();
+    await request(a).post('/admin/routes/demo-route/nodes/n2/merchant').send({ stock: [{ itemId: 'dagger' }] }).expect(401);
+    const t = await token(a);
+    await request(a).post('/admin/routes/demo-route/nodes/n2/merchant')
+      .set('Authorization', `Bearer ${t}`).send({ stock: [{ itemId: 'dagger' }] }).expect(204);
+  });
+
+  it('admin merchant rejects unknown items', async () => {
+    const a = app();
+    const t = await token(a);
+    await request(a).post('/admin/routes/demo-route/nodes/n2/merchant')
+      .set('Authorization', `Bearer ${t}`).send({ stock: [{ itemId: 'ghost' }] }).expect(400);
+  });
+
+  it('player can read the shop after the merchant is set', async () => {
+    const a = app();
+    const t = await token(a);
+    await request(a).post('/admin/routes/demo-route/nodes/n1/merchant')
+      .set('Authorization', `Bearer ${t}`).send({ stock: [{ itemId: 'dagger', price: 5 }] }).expect(204);
+    const { body: ng } = await request(a).post('/sessions').send({ backgroundId: 'rogue', routeId: 'demo-route' }).expect(200);
+    const { body: shop } = await request(a).get(`/sessions/${ng.sessionId}/shop`).expect(200);
+    expect(shop.stock[0].price).toBe(5);
+  });
+
+  it('POST /buy is wired (400 when no merchant at the current node)', async () => {
+    const a = app();
+    const { body: ng } = await request(a).post('/sessions').send({ backgroundId: 'rogue', routeId: 'demo-route' }).expect(200);
+    await request(a).post(`/sessions/${ng.sessionId}/buy`).send({ itemId: 'dagger' }).expect(400);
+  });
+
+  it('POST /use is wired (400 when item not owned)', async () => {
+    const a = app();
+    const { body: ng } = await request(a).post('/sessions').send({ backgroundId: 'rogue', routeId: 'demo-route' }).expect(200);
+    await request(a).post(`/sessions/${ng.sessionId}/use`).send({ itemId: 'healPotion' }).expect(400);
+  });
+});
+
 describe('POST /admin/routes/:id/nodes/:nodeId/source', () => {
   it('flips a node source and is reflected in the route', async () => {
     const a = app();

@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { gameApi, ApiError } from '../services/api';
-import type { SessionView, ChoiceView } from '../services/api';
+import type { SessionView, ChoiceView, ShopView } from '../services/api';
 
-export type Screen = 'charcreate' | 'story' | 'combat' | 'inventory' | 'ending';
+export type Screen = 'charcreate' | 'story' | 'combat' | 'inventory' | 'shop' | 'ending';
 
 export interface GameState {
   screen: Screen;
@@ -10,6 +10,7 @@ export interface GameState {
   view: SessionView | null;
   lastChoice: ChoiceView | null; // holds combat log / check result after a choice
   pendingFightChoiceId: string | null; // choice that routed us into the combat screen
+  shop: ShopView | null; // merchant stock, loaded when entering the shop screen
   error: string | null;
   busy: boolean;
 }
@@ -20,6 +21,7 @@ const INITIAL: GameState = {
   view: null,
   lastChoice: null,
   pendingFightChoiceId: null,
+  shop: null,
   error: null,
   busy: false,
 };
@@ -81,9 +83,31 @@ export function useGameSession() {
     return { view };
   }), [run, state.sessionId, state.view]);
 
+  const buy = useCallback((itemId: string) => run(async () => {
+    const id = state.sessionId!;
+    const res = await gameApi.buy(id, itemId);
+    // merge updated save/effectiveStats back into the current view
+    const view = state.view ? { ...state.view, save: res.save, effectiveStats: res.effectiveStats } : null;
+    return { view };
+  }), [run, state.sessionId, state.view]);
+
+  const useItem = useCallback((itemId: string) => run(async () => {
+    const id = state.sessionId!;
+    const res = await gameApi.useItem(id, itemId);
+    // merge updated save/effectiveStats back into the current view
+    const view = state.view ? { ...state.view, save: res.save, effectiveStats: res.effectiveStats } : null;
+    return { view };
+  }), [run, state.sessionId, state.view]);
+
+  const openShop = useCallback(() => run(async () => {
+    const id = state.sessionId!;
+    const shop = await gameApi.getShop(id);
+    return { shop, screen: 'shop' as Screen };
+  }), [run, state.sessionId]);
+
   const goTo = useCallback((screen: Screen) => {
     setState((s) => ({ ...s, screen }));
   }, []);
 
-  return { state, start, choose, enterCombat, fight, equip, goTo, continueRoute };
+  return { state, start, choose, enterCombat, fight, equip, buy, useItem, openShop, goTo, continueRoute };
 }

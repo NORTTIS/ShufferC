@@ -69,3 +69,18 @@ describe('RouteStore.setNodeSource', () => {
     await expect(store.setNodeSource('rt', 'ghost', 'live')).rejects.toThrow();
   });
 });
+
+describe('RouteStore.setMerchant', () => {
+  it('sets and clears a node merchant', async () => {
+    const store = createMemoryRouteStore([bundle()]);
+    await store.setMerchant('rt', 'n1', { stock: [{ itemId: 'dagger', price: 12 }] });
+    expect((await store.get('rt'))!.nodes.n1.merchant).toEqual({ stock: [{ itemId: 'dagger', price: 12 }] });
+    await store.setMerchant('rt', 'n1', null);
+    expect((await store.get('rt'))!.nodes.n1.merchant).toBeUndefined();
+  });
+  it('throws for an unknown route or node', async () => {
+    const store = createMemoryRouteStore([bundle()]);
+    await expect(store.setMerchant('ghost', 'n1', null)).rejects.toThrow();
+    await expect(store.setMerchant('rt', 'ghost', null)).rejects.toThrow();
+  });
+});

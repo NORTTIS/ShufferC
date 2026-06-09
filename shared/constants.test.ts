@@ -14,6 +14,6 @@ describe('constants', () => {
   it('defines HP + save constants', () => {
     expect(BASE_HP).toBe(20);
     expect(HP_PER_CON).toBe(5);
-    expect(SAVE_VERSION).toBe(2);
+    expect(SAVE_VERSION).toBe(3);
   });
 });
