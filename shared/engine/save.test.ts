@@ -36,7 +36,7 @@ describe('save serialize/deserialize', () => {
   });
 
   it('throws for a version newer than supported', () => {
-    expect(() => deserialize(JSON.stringify({ version: 99 }))).toThrow();
+    expect(() => deserialize(JSON.stringify({ version: 99 }))).toThrow(/version/i);
   });
 
   it('round-trips a v3 save carrying liveNodes overlays', () => {

@@ -12,7 +12,7 @@ export function deserialize(json: string): SaveState {
   }
   // Backfill fields added in v3. deserialize has no item DB, so currentHp is
   // approximated from baseStats con; the session clamps it to the equip-adjusted max.
-  const con = data.character?.baseStats.con ?? 0;
+  const con = data.character?.baseStats?.con ?? 0;
   const migrated: SaveState = {
     ...(data as SaveState),
     version: SAVE_VERSION,
