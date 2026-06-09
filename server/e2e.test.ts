@@ -83,3 +83,16 @@ describe('useItem', () => {
     await expect(s.useItem(sessionId, 'healPotion')).rejects.toMatchObject({ status: 400 });
   });
 });
+
+describe('equip HP clamp', () => {
+  it('clamps currentHp when unequipping a max-HP item drops max below current', async () => {
+    const s = createGameSession(createMemoryStore());
+    const { sessionId, save } = await s.newGame('fighter'); // fighter starts with ringOfRegen equipped (con +2 → higher maxHp)
+    // currentHp starts at full (with ring). Unequip the ring → maxHp drops → currentHp must clamp down.
+    const before = save.vitals.currentHp;
+    const res = await s.equip(sessionId, 'ring', null);
+    const newMax = res.effectiveStats.con * 5 + 20; // deriveMaxHp = BASE_HP(20) + con*HP_PER_CON(5)
+    expect(res.save.vitals.currentHp).toBeLessThanOrEqual(newMax);
+    expect(res.save.vitals.currentHp).toBeLessThanOrEqual(before);
+  });
+});

@@ -362,6 +362,8 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         }
         save.character.equipped[slot as EquipSlot] = itemId;
       }
+      const maxHp = deriveMaxHp(effectiveStats(save.character, deps.itemDb));
+      if (save.vitals.currentHp > maxHp) save.vitals.currentHp = maxHp;
       await store.put(id, save);
       const stored = structuredClone(save);
       return { save: stored, effectiveStats: effectiveStats(stored.character, deps.itemDb) };
