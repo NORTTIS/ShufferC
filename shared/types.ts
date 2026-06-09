@@ -1,5 +1,11 @@
 export type StatKey = 'str' | 'dex' | 'int' | 'wis' | 'cha' | 'con';
 export type Stats = Record<StatKey, number>;
+
+export interface ReputationDelta {
+  hero?: number;
+  villain?: number;
+  factions?: Record<string, number>;
+}
 export type EffectKind = 'buff' | 'debuff' | 'dot' | 'hot' | 'control';
 export type EquipSlot = 'weapon' | 'armor' | 'ring' | 'scroll' | 'quest';
 
@@ -31,6 +37,8 @@ export interface Item {
   id: string;
   name: string;
   slot: EquipSlot;
+  kind: 'gear' | 'consumable';   // routes drops/purchases to inventory[] vs consumables{}
+  cost?: number;                 // base shop price; a node merchant may override
   statMods?: Partial<Stats>;
   onEquip?: StatusEffect[];
   onUse?: StatusEffect[];
@@ -46,6 +54,12 @@ export interface Enemy {
   hp: number;
   skillPriority: string[];
   sprite?: string;
+  reward?: {
+    gold?: [number, number];                       // inclusive min..max
+    xp?: number;
+    drops?: { itemId: string; chance: number }[];   // chance in [0,1]
+    reputationDelta?: ReputationDelta;
+  };
 }
 
 export interface CombatActor {
@@ -79,7 +93,7 @@ export interface CombatResult {
 
 export interface ChoiceOutcome {
   statDelta?: Partial<Stats>;
-  reputationDelta?: { hero?: number; villain?: number; factions?: Record<string, number> };
+  reputationDelta?: ReputationDelta;
   addItems?: string[];
   removeItems?: string[];
   setFlags?: Record<string, boolean>;
@@ -98,6 +112,7 @@ export interface StoryNode {
   prose: string;
   choices: Choice[];
   combat?: { enemyIds: string[] };
+  merchant?: { stock: { itemId: string; price?: number }[] };  // price overrides Item.cost
   source: 'pregen' | 'live';
 }
 
@@ -134,8 +149,13 @@ export interface SaveState {
   choiceLog: { nodeId: string; choiceId: string }[];
   currentNodeId: string;
   seed: number;
-  playedRouteIds?: string[];   // route ids already consumed; never re-picked
-  liveNodes?: Record<string, LiveOverlay>;   // nodeId → Flash-enriched text (per playthrough)
+  gold: number;
+  xp: number;
+  level: number;
+  consumables: Record<string, number>;   // itemId -> qty
+  vitals: { currentHp: number; pendingBuffs: StatusEffect[] };
+  playedRouteIds?: string[];
+  liveNodes?: Record<string, LiveOverlay>;
 }
 
 /** Flash-generated text for one live node, overlaid onto its stub at view time. */

@@ -13,12 +13,12 @@ export const SKILL_DB: Record<string, Skill> = {
 };
 
 export const ITEM_DB: Record<string, Item> = {
-  dagger: { id: 'dagger', name: 'Dagger', slot: 'weapon', statMods: { str: 2 }, storyTags: ['rogue'], sprite: 'item.dagger' },
+  dagger: { id: 'dagger', name: 'Dagger', slot: 'weapon', kind: 'gear', cost: 15, statMods: { str: 2 }, storyTags: ['rogue'], sprite: 'item.dagger' },
   ringOfRegen: {
-    id: 'ringOfRegen', name: 'Ring of Regen', slot: 'ring', statMods: { con: 2 },
+    id: 'ringOfRegen', name: 'Ring of Regen', slot: 'ring', kind: 'gear', cost: 30, statMods: { con: 2 },
     onEquip: [{ id: 'regen', kind: 'hot', duration: 99, magnitude: 1 }], storyTags: ['mystic'], sprite: 'item.ring',
   },
-  torch: { id: 'torch', name: 'Torch', slot: 'quest', storyTags: ['dungeon'], sprite: 'item.torch' },
+  torch: { id: 'torch', name: 'Torch', slot: 'quest', kind: 'gear', storyTags: ['dungeon'], sprite: 'item.torch' },
 };
 
 export const ENEMY_DB: Record<string, Enemy> = {
