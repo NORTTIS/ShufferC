@@ -161,6 +161,21 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
     return undefined;
   }));
 
+  app.post('/admin/routes/:id/nodes/:nodeId/source', wrap(async (req, res) => {
+    const id = req.params.id as string;
+    const nodeId = req.params.nodeId as string;
+    const source = req.body?.source;
+    if (source !== 'live' && source !== 'pregen') {
+      throw new GameError('source must be "live" or "pregen"', 400);
+    }
+    const bundle = await admin.routes.get(id);
+    if (!bundle) throw new GameError(`Route ${id} not found`, 404);
+    if (!bundle.nodes[nodeId]) throw new GameError(`Node ${nodeId} not found in route ${id}`, 404);
+    await admin.routes.setNodeSource(id, nodeId, source);
+    res.status(204).end();
+    return undefined;
+  }));
+
   // Centralised error handler — maps GameError.status, defaults to 500.
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const status = err instanceof GameError ? err.status : 500;
