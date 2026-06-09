@@ -8,6 +8,7 @@ import { CharCreate } from './src/screens/CharCreate';
 import { Story } from './src/screens/Story';
 import { Combat } from './src/screens/Combat';
 import { Inventory } from './src/screens/Inventory';
+import { Shop } from './src/screens/Shop';
 import { Ending } from './src/screens/Ending';
 import { Screen, Heading, Button, Banner } from './src/components';
 import { colors, space } from './src/theme';
@@ -16,7 +17,7 @@ const APP_TITLE = 'ShufferC';
 
 export default function App() {
   const auth = useAuth();
-  const { state, start, choose, enterCombat, fight, equip, goTo, continueRoute } = useGameSession();
+  const { state, start, choose, enterCombat, fight, equip, buy, useItem, openShop, goTo, continueRoute } = useGameSession();
 
   if (auth.status === 'loading') {
     return (
@@ -65,6 +66,7 @@ export default function App() {
             onChoose={choose}
             onFight={enterCombat}
             onInventory={() => goTo('inventory')}
+            onShop={openShop}
           />
         )}
 
@@ -73,7 +75,17 @@ export default function App() {
         )}
 
         {state.screen === 'inventory' && state.view && (
-          <Inventory view={state.view} busy={state.busy} onEquip={equip} onBack={() => goTo('story')} />
+          <Inventory view={state.view} busy={state.busy} onEquip={equip} onUse={useItem} onBack={() => goTo('story')} />
+        )}
+
+        {state.screen === 'shop' && state.shop && state.view && (
+          <Shop
+            shop={state.shop}
+            gold={state.view.save.gold}
+            busy={state.busy}
+            onBuy={buy}
+            onBack={() => goTo('story')}
+          />
         )}
 
         {state.screen === 'ending' && state.view && (
