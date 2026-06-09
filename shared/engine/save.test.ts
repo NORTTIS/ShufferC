@@ -38,4 +38,9 @@ describe('save serialize/deserialize', () => {
   it('throws for a version newer than supported', () => {
     expect(() => deserialize(JSON.stringify({ version: 99 }))).toThrow();
   });
+
+  it('round-trips a v3 save carrying liveNodes overlays', () => {
+    const s: SaveState = { ...v3save(), liveNodes: { n2: { prose: 'enriched', choiceTexts: ['go', 'stay'] } } };
+    expect(deserialize(serialize(s))).toEqual(s);
+  });
 });
