@@ -278,6 +278,18 @@ describe('shop/use routes', () => {
     const { body: shop } = await request(a).get(`/sessions/${ng.sessionId}/shop`).expect(200);
     expect(shop.stock[0].price).toBe(5);
   });
+
+  it('POST /buy is wired (400 when no merchant at the current node)', async () => {
+    const a = app();
+    const { body: ng } = await request(a).post('/sessions').send({ backgroundId: 'rogue', routeId: 'demo-route' }).expect(200);
+    await request(a).post(`/sessions/${ng.sessionId}/buy`).send({ itemId: 'dagger' }).expect(400);
+  });
+
+  it('POST /use is wired (400 when item not owned)', async () => {
+    const a = app();
+    const { body: ng } = await request(a).post('/sessions').send({ backgroundId: 'rogue', routeId: 'demo-route' }).expect(200);
+    await request(a).post(`/sessions/${ng.sessionId}/use`).send({ itemId: 'healPotion' }).expect(400);
+  });
 });
 
 describe('POST /admin/routes/:id/nodes/:nodeId/source', () => {
