@@ -92,6 +92,8 @@
           <tbody id="routesBody"></tbody>
         </table>
         <pre id="viewOut" class="hidden"></pre>
+        <div id="nodeMsg" class="msg"></div>
+        <div id="nodesOut" class="hidden"></div>
       </section>
     </div>
   </main>
@@ -181,6 +183,41 @@
       const bundle = await api('/admin/routes/' + id, { headers: authHeaders() });
       const out = $('viewOut'); out.classList.remove('hidden');
       out.textContent = JSON.stringify(bundle, null, 2);
+      renderNodes(id, bundle);
+    }
+
+    function renderNodes(routeId, bundle) {
+      const box = $('nodesOut'); box.classList.remove('hidden'); box.innerHTML = '';
+      const h = document.createElement('h3');
+      h.style.fontSize = '13px'; h.textContent = 'Nodes — toggle live AI generation';
+      box.appendChild(h);
+      for (const nid of Object.keys(bundle.nodes)) {
+        const node = bundle.nodes[nid];
+        const row = document.createElement('div'); row.style.margin = '6px 0';
+        const label = document.createElement('span');
+        label.textContent = nid + '  [' + node.source + ']  ';
+        row.appendChild(label);
+        const next = node.source === 'live' ? 'pregen' : 'live';
+        const btn = document.createElement('button');
+        btn.className = 'secondary'; btn.textContent = 'Mark ' + next;
+        btn.onclick = () => setNodeSource(routeId, nid, next);
+        row.appendChild(btn);
+        box.appendChild(row);
+      }
+    }
+
+    async function setNodeSource(routeId, nodeId, source) {
+      const msg = $('nodeMsg'); msg.className = 'msg'; msg.textContent = '';
+      try {
+        await api('/admin/routes/' + routeId + '/nodes/' + nodeId + '/source', {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify({ source }),
+        });
+        msg.className = 'msg ok'; msg.textContent = nodeId + ' → ' + source;
+        await viewRoute(routeId); // refresh node list + JSON
+      } catch (e) {
+        msg.className = 'msg err';
+        msg.textContent = e.status === 404 ? 'Route or node not found.' : ('Error: ' + e.message);
+      }
     }
 
     async function publishRoute(id) {
