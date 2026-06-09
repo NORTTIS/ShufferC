@@ -397,17 +397,18 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       const save = await load(id);
       if ((save.consumables[itemId] ?? 0) <= 0) throw new GameError(`Item ${itemId} not owned`, 400);
       const item = deps.itemDb[itemId];
-      if (!item) throw new GameError(`Item ${itemId} not found`, 400);
+      if (!item) throw new GameError(`Item ${itemId} not found`, 500); // owned id missing from itemDb = bad data, not user error
       if (item.kind !== 'consumable') throw new GameError(`Item ${itemId} is not consumable`, 400);
 
       const maxHp = deriveMaxHp(effectiveStats(save.character, deps.itemDb));
       for (const eff of item.onUse ?? []) {
         if (eff.duration === 0) {
+          // instant effects: only heal-over-time restores HP out of combat; other instant kinds are intentionally ignored here
           if (eff.kind === 'hot') {
             save.vitals.currentHp = Math.min(maxHp, save.vitals.currentHp + (eff.magnitude ?? 0));
           }
         } else {
-          save.vitals.pendingBuffs.push(eff);
+          save.vitals.pendingBuffs.push(eff); // lasting effects carry into the next combat
         }
       }
       save.consumables[itemId] -= 1;
