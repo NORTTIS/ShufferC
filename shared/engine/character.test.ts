@@ -1,5 +1,6 @@
 import { effectiveStats, deriveMaxHp, buildPlayerActor, buildEnemyActor } from './character';
-import { CharacterState, Item, Skill, Enemy, Stats } from '../types';
+import { CharacterState, Item, Skill, Enemy, Stats, AttributeDef } from '../types';
+import { ATTRIBUTE_DB, EFFECT_DB } from '../fixtures';
 
 it('effectiveStats sums non-core attribute mods from equipped gear', () => {
   const itemDb: Record<string, Item> = {
@@ -46,8 +47,14 @@ describe('effectiveStats', () => {
 
 describe('deriveMaxHp', () => {
   it('is BASE_HP + con * HP_PER_CON', () => {
-    expect(deriveMaxHp({ ...baseStats, con: 6 })).toBe(20 + 6 * 5); // 50
+    expect(deriveMaxHp({ ...baseStats, con: 6 }, Object.values(ATTRIBUTE_DB))).toBe(20 + 6 * 5); // 50
   });
+});
+
+it('deriveMaxHp sums every attribute carrying the maxHp role', () => {
+  expect(deriveMaxHp({ con: 4 }, Object.values(ATTRIBUTE_DB))).toBe(20 + 4 * 5); // BASE_HP=20, HP_PER_CON=5
+  const withVit: AttributeDef[] = [...Object.values(ATTRIBUTE_DB), { id: 'vit', name: 'Vitality', abbrev: 'VIT', roles: ['maxHp'], builtin: false }];
+  expect(deriveMaxHp({ con: 4, vit: 2 }, withVit)).toBe(20 + (4 + 2) * 5);
 });
 
 describe('buildPlayerActor', () => {
@@ -56,7 +63,7 @@ describe('buildPlayerActor', () => {
       background: 'fighter', baseStats, inventory: ['sword', 'ringOfRegen'],
       equipped: { weapon: 'sword', ring: 'ringOfRegen' }, skillPriority: ['slash'],
     };
-    const actor = buildPlayerActor(c, itemDb, skillDb);
+    const actor = buildPlayerActor(c, itemDb, skillDb, EFFECT_DB, Object.values(ATTRIBUTE_DB));
     expect(actor.stats.str).toBe(11);
     expect(actor.maxHp).toBe(20 + 6 * 5); // con 6
     expect(actor.hp).toBe(actor.maxHp);
@@ -93,21 +100,21 @@ function t4Char(): CharacterState {
 
 describe('buildPlayerActor options', () => {
   it('merges grantsSkills from equipped items into priority and book', () => {
-    const a = buildPlayerActor(t4Char(), t4ItemDb, t4SkillDb);
+    const a = buildPlayerActor(t4Char(), t4ItemDb, t4SkillDb, EFFECT_DB, Object.values(ATTRIBUTE_DB));
     expect(a.skillPriority).toContain('bless');
     expect(a.skillBook.bless).toBeDefined();
   });
 
   it('uses startHp clamped to maxHp when provided', () => {
     const c = t4Char();
-    const maxHp = deriveMaxHp(effectiveStats(c, t4ItemDb));
-    expect(buildPlayerActor(c, t4ItemDb, t4SkillDb, { startHp: 3 }).hp).toBe(3);
-    expect(buildPlayerActor(c, t4ItemDb, t4SkillDb).hp).toBe(maxHp);
-    expect(buildPlayerActor(c, t4ItemDb, t4SkillDb, { startHp: 9999 }).hp).toBe(maxHp);
+    const maxHp = deriveMaxHp(effectiveStats(c, t4ItemDb), Object.values(ATTRIBUTE_DB));
+    expect(buildPlayerActor(c, t4ItemDb, t4SkillDb, EFFECT_DB, Object.values(ATTRIBUTE_DB), { startHp: 3 }).hp).toBe(3);
+    expect(buildPlayerActor(c, t4ItemDb, t4SkillDb, EFFECT_DB, Object.values(ATTRIBUTE_DB)).hp).toBe(maxHp);
+    expect(buildPlayerActor(c, t4ItemDb, t4SkillDb, EFFECT_DB, Object.values(ATTRIBUTE_DB), { startHp: 9999 }).hp).toBe(maxHp);
   });
 
   it('applies extraBuffs as statuses', () => {
-    const a = buildPlayerActor(t4Char(), t4ItemDb, t4SkillDb, { extraBuffs: [{ id: 'regen', kind: 'hot', duration: 3, magnitude: 2 }] });
+    const a = buildPlayerActor(t4Char(), t4ItemDb, t4SkillDb, EFFECT_DB, Object.values(ATTRIBUTE_DB), { extraBuffs: [{ id: 'regen', kind: 'hot', duration: 3, magnitude: 2 }] });
     expect(a.statuses.some((s) => s.id === 'regen')).toBe(true);
   });
 });

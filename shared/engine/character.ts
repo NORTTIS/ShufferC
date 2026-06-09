@@ -1,6 +1,6 @@
-import { CharacterState, CombatActor, Enemy, Item, Skill, Stats, StatusEffect } from '../types';
+import { CharacterState, CombatActor, Enemy, Item, Skill, Stats, StatusEffect, AttributeDef } from '../types';
 import { BASE_HP, HP_PER_CON } from '../constants';
-import { applyEffect } from './effects';
+import { applyEffect, EffectMap } from './effects';
 
 export function effectiveStats(character: CharacterState, itemDb: Record<string, Item>): Stats {
   const result: Stats = { ...character.baseStats };
@@ -15,8 +15,11 @@ export function effectiveStats(character: CharacterState, itemDb: Record<string,
   return result;
 }
 
-export function deriveMaxHp(stats: Stats): number {
-  return BASE_HP + stats.con * HP_PER_CON;
+export function deriveMaxHp(stats: Stats, attrs: AttributeDef[]): number {
+  const bonus = attrs
+    .filter((a) => a.roles.includes('maxHp'))
+    .reduce((sum, a) => sum + (stats[a.id] ?? 0), 0);
+  return BASE_HP + bonus * HP_PER_CON;
 }
 
 function collectSkillBook(ids: string[], skillDb: Record<string, Skill>): Record<string, Skill> {
@@ -36,10 +39,12 @@ export function buildPlayerActor(
   character: CharacterState,
   itemDb: Record<string, Item>,
   skillDb: Record<string, Skill>,
+  effects: EffectMap,
+  attrs: AttributeDef[],
   opts: BuildPlayerOptions = {},
 ): CombatActor {
   const stats = effectiveStats(character, itemDb);
-  const maxHp = deriveMaxHp(stats);
+  const maxHp = deriveMaxHp(stats, attrs);
 
   // Equipped items may grant skills; append after the character's own priority.
   const granted: string[] = [];
@@ -63,9 +68,9 @@ export function buildPlayerActor(
   for (const itemId of Object.values(character.equipped)) {
     if (!itemId) continue;
     const item = itemDb[itemId];
-    for (const eff of item?.onEquip ?? []) applyEffect(actor, eff);
+    for (const eff of item?.onEquip ?? []) applyEffect(actor, eff, effects);
   }
-  for (const eff of opts.extraBuffs ?? []) applyEffect(actor, eff);
+  for (const eff of opts.extraBuffs ?? []) applyEffect(actor, eff, effects);
   return actor;
 }
 
