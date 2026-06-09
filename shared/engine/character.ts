@@ -1,5 +1,5 @@
 import { CharacterState, CombatActor, Enemy, Item, Skill, Stats, StatusEffect } from '../types';
-import { STAT_KEYS, BASE_HP, HP_PER_CON } from '../constants';
+import { BASE_HP, HP_PER_CON } from '../constants';
 import { applyEffect } from './effects';
 
 export function effectiveStats(character: CharacterState, itemDb: Record<string, Item>): Stats {
@@ -8,9 +8,8 @@ export function effectiveStats(character: CharacterState, itemDb: Record<string,
     if (!itemId) continue;
     const item = itemDb[itemId];
     if (!item?.statMods) continue;
-    for (const key of STAT_KEYS) {
-      const mod = item.statMods[key];
-      if (mod) result[key] += mod;
+    for (const [key, mod] of Object.entries(item.statMods)) {
+      if (mod) result[key] = (result[key] ?? 0) + mod;
     }
   }
   return result;

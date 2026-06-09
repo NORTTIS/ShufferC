@@ -1,6 +1,18 @@
 import { effectiveStats, deriveMaxHp, buildPlayerActor, buildEnemyActor } from './character';
 import { CharacterState, Item, Skill, Enemy, Stats } from '../types';
 
+it('effectiveStats sums non-core attribute mods from equipped gear', () => {
+  const itemDb: Record<string, Item> = {
+    plate: { id: 'plate', name: 'Plate', slot: 'armor', kind: 'gear', statMods: { armor: 3, str: 1 }, storyTags: [] },
+  };
+  const character: CharacterState = {
+    background: 'x', baseStats: { str: 5, con: 4 }, inventory: ['plate'], equipped: { armor: 'plate' }, skillPriority: [],
+  };
+  const stats = effectiveStats(character, itemDb);
+  expect(stats.str).toBe(6);
+  expect(stats.armor).toBe(3); // new attribute flows through even though baseStats lacked it
+});
+
 const baseStats: Stats = { str: 8, dex: 6, int: 5, wis: 5, cha: 5, con: 4 };
 
 const itemDb: Record<string, Item> = {
