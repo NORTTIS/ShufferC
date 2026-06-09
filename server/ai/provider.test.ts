@@ -13,3 +13,11 @@ describe('createFakeProvider', () => {
     await expect(p.generateStructured('x', {})).rejects.toThrow(/exhausted/i);
   });
 });
+
+describe('AIProvider options', () => {
+  it('FakeProvider accepts and ignores a model option, still returning the queued response', async () => {
+    const p = createFakeProvider([{ ok: 1 }]);
+    const out = await p.generateStructured('prompt', {}, { model: 'flash' });
+    expect(out).toEqual({ ok: 1 });
+  });
+});

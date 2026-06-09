@@ -1,4 +1,4 @@
-import { GenerationParams, Registries, ValidationError } from '../../shared/types';
+import { GenerationParams, Registries, ValidationError, StoryNode, GameRoute } from '../../shared/types';
 
 /** Build the framework-generation prompt. On retry, prior errors are appended for self-correction. */
 export function buildFrameworkPrompt(
@@ -48,6 +48,55 @@ export function buildFrameworkPrompt(
     example,
     'Source material to adapt into the prose and choices:',
     params.contextText,
+  ];
+
+  if (lastErrors && lastErrors.length) {
+    lines.push('Your previous attempt had these problems; fix them:');
+    for (const e of lastErrors) lines.push(`- [${e.code}] ${e.path}: ${e.message}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Build the live event-gen prompt for ONE node. Flash enriches the stub's prose and
+ * each choice's display text only — it must NOT add, drop, or re-target choices.
+ * The stub's current text is the seed; RAG novel context grounds the rewrite.
+ * On retry, prior errors are appended for self-correction.
+ */
+export function buildEventPrompt(
+  stub: StoryNode,
+  route: GameRoute,
+  ragText: string,
+  pathSummary: string,
+  lastErrors?: ValidationError[],
+): string {
+  const n = stub.choices.length;
+  const example = JSON.stringify({
+    prose: 'A richer, novel-grounded retelling of this beat…',
+    choiceTexts: stub.choices.map((c) => `(reworded) ${c.text}`),
+  });
+
+  const lines = [
+    'You are a game narrator enriching ONE story node at play time. Output ONLY a single JSON object that matches the provided schema. No markdown, no prose outside the JSON.',
+    `The route is titled "${route.title}". Keep tone consistent and suitable for ages 13+.`,
+    'The JSON has exactly two fields:',
+    '- "prose": a vivid retelling of this scene.',
+    `- "choiceTexts": an array of EXACTLY ${n} strings, one per existing choice, in the SAME order.`,
+    'Rules:',
+    '- Enrich WORDING only. Do NOT change what a choice does or where it leads; do NOT add or remove choices.',
+    `- "choiceTexts" MUST contain exactly ${n} non-empty entries (one per existing choice).`,
+    '- Stay faithful to the source novel context provided below; do not invent contradicting facts.',
+    'Current node prose (the beat to enrich):',
+    stub.prose,
+    'Current choice texts (reword these, same order, same meaning):',
+    stub.choices.map((c, i) => `${i + 1}. ${c.text}`).join('\n') || '(no choices)',
+    'Player context so far:',
+    pathSummary || '(none)',
+    'Source novel context (for grounding):',
+    ragText || '(none provided)',
+    'Shape example (structure only — write your own content):',
+    example,
   ];
 
   if (lastErrors && lastErrors.length) {

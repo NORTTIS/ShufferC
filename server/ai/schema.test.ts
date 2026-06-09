@@ -1,4 +1,4 @@
-import { GenBundleSchema, GEN_BUNDLE_JSON_SCHEMA } from './schema';
+import { GenBundleSchema, GEN_BUNDLE_JSON_SCHEMA, EventOverlaySchema, EVENT_OVERLAY_JSON_SCHEMA } from './schema';
 import { SAMPLE_BUNDLE } from '../../shared/fixtures';
 
 // Gen form = the shape the model emits: nodes as an array (not a keyed record).
@@ -33,5 +33,24 @@ describe('GenBundleSchema', () => {
   it('exports a non-empty JSON schema object for Gemini', () => {
     expect(typeof GEN_BUNDLE_JSON_SCHEMA).toBe('object');
     expect(Object.keys(GEN_BUNDLE_JSON_SCHEMA).length).toBeGreaterThan(0);
+  });
+});
+
+describe('EventOverlaySchema', () => {
+  it('parses a well-formed overlay', () => {
+    const r = EventOverlaySchema.safeParse({ prose: 'hello', choiceTexts: ['a', 'b'] });
+    expect(r.success).toBe(true);
+  });
+  it('rejects an empty prose string', () => {
+    const r = EventOverlaySchema.safeParse({ prose: '', choiceTexts: [] });
+    expect(r.success).toBe(false);
+  });
+  it('rejects an empty choice text', () => {
+    const r = EventOverlaySchema.safeParse({ prose: 'x', choiceTexts: [''] });
+    expect(r.success).toBe(false);
+  });
+  it('exposes a non-empty JSON schema', () => {
+    expect(typeof EVENT_OVERLAY_JSON_SCHEMA).toBe('object');
+    expect(Object.keys(EVENT_OVERLAY_JSON_SCHEMA as object).length).toBeGreaterThan(0);
   });
 });

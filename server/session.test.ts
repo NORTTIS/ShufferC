@@ -4,6 +4,7 @@ import { createMemoryRouteStore } from './store/memoryRouteStore';
 import { BACKGROUNDS } from '../shared/backgrounds';
 import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE, SAMPLE_ROUTE } from '../shared/fixtures';
 import { RouteBundle } from '../shared/types';
+import { createFakeProvider, AIProvider } from './ai/provider';
 
 function newSession() {
   return createGameSession(createMemoryStore());
@@ -315,5 +316,87 @@ describe('GameSession.applyChoice — hasNextRoute', () => {
     expect(view.ending).toBeUndefined();
     expect(view.node.choices.length).toBe(0);
     expect(view.hasNextRoute).toBe(true); // route-2 is still unplayed
+  });
+});
+
+function liveBundle(): RouteBundle {
+  return {
+    route: {
+      id: 'live-route', title: 'Live', sourceNovelId: 'adhoc',
+      acts: [{ id: 'a1', title: 'A', nodeIds: ['s1', 's2'] }],
+      itemPool: [], enemyPool: [], endings: [{ id: 'e', title: 'E', condition: 'currentNodeId === s2' }],
+      status: 'published',
+    },
+    nodes: {
+      s1: { id: 's1', source: 'live', prose: 'stub prose', choices: [{ id: 'go', text: 'stub choice', nextNodeId: 's2' }] },
+      s2: { id: 's2', source: 'pregen', prose: 'the end', choices: [] },
+    },
+  };
+}
+
+function liveSession(provider: AIProvider) {
+  return createGameSession(createMemoryStore(), {
+    backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+    routes: createMemoryRouteStore([liveBundle()]), provider,
+  });
+}
+
+describe('GameSession live event-gen', () => {
+  it('enriches a live node, overlays prose + choice text, and caches it', async () => {
+    const overlay = { prose: 'rich prose', choiceTexts: ['rich choice'] };
+    const s = liveSession(createFakeProvider([overlay])); // queue has exactly ONE response
+    const res = await s.newGame('rogue', 'live-route');
+    expect(res.node.prose).toBe('rich prose');
+    expect(res.node.choices[0].text).toBe('rich choice');
+    expect(res.save.liveNodes!['s1']).toEqual(overlay);
+
+    // Second view must serve the cache WITHOUT a second provider call. If it called
+    // again, FakeProvider's queue (now empty) would throw — so this also asserts no re-call.
+    const again = await s.getView(res.sessionId);
+    expect(again.node.prose).toBe('rich prose');
+  });
+
+  it('falls back to stub text and does not cache when generation fails', async () => {
+    const s = liveSession(createFakeProvider([{}, {}])); // both attempts bad shape (maxAttempts 2)
+    const res = await s.newGame('rogue', 'live-route');
+    expect(res.node.prose).toBe('stub prose');
+    expect(res.node.choices[0].text).toBe('stub choice');
+    expect(res.save.liveNodes).toBeUndefined();
+  });
+
+  it('serves stub text when no provider is configured', async () => {
+    const s = createGameSession(createMemoryStore(), {
+      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      routes: createMemoryRouteStore([liveBundle()]),
+    });
+    const res = await s.newGame('rogue', 'live-route');
+    expect(res.node.prose).toBe('stub prose');
+  });
+
+  it('enriches a live node reached via applyChoice (choice text overlaid)', async () => {
+    const advBundle: RouteBundle = {
+      route: {
+        id: 'adv-route', title: 'Adv', sourceNovelId: 'adhoc',
+        acts: [{ id: 'a1', title: 'A', nodeIds: ['p1', 'L1', 'end'] }],
+        itemPool: [], enemyPool: [], endings: [{ id: 'e', title: 'E', condition: 'currentNodeId === end' }],
+        status: 'published',
+      },
+      nodes: {
+        p1: { id: 'p1', source: 'pregen', prose: 'start', choices: [{ id: 'adv', text: 'advance', nextNodeId: 'L1' }] },
+        L1: { id: 'L1', source: 'live', prose: 'live stub', choices: [{ id: 'go', text: 'stub go', nextNodeId: 'end' }] },
+        end: { id: 'end', source: 'pregen', prose: 'fin', choices: [] },
+      },
+    };
+    const overlay = { prose: 'enriched live prose', choiceTexts: ['enriched go'] };
+    const s = createGameSession(createMemoryStore(), {
+      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      routes: createMemoryRouteStore([advBundle]), provider: createFakeProvider([overlay]),
+    });
+    const { sessionId } = await s.newGame('rogue', 'adv-route'); // starts at pregen p1 → no provider call
+    const after = await s.applyChoice(sessionId, 'adv');         // advances to live L1 → enrich fires
+    expect(after.save.currentNodeId).toBe('L1');
+    expect(after.node.prose).toBe('enriched live prose');
+    expect(after.node.choices[0].text).toBe('enriched go');
+    expect(after.save.liveNodes!['L1']).toEqual(overlay);
   });
 });

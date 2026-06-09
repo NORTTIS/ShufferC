@@ -1,5 +1,6 @@
 import {
   SaveState, StoryNode, Stats, Item, Skill, Enemy, EquipSlot, CombatResult, GameRoute, RouteBundle,
+  LiveOverlay,
 } from '../shared/types';
 import { SAVE_VERSION, EQUIP_SLOTS } from '../shared/constants';
 import { Background, BACKGROUNDS } from '../shared/backgrounds';
@@ -12,6 +13,11 @@ import { parseEndingCondition } from '../shared/endings';
 import { SaveStore } from './store/SaveStore';
 import { RouteStore } from './store/RouteStore';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
+import { AIProvider } from './ai/provider';
+import { EmbeddingProvider } from './rag/embeddingProvider';
+import { EmbeddingStore } from './rag/novelStore';
+import { retrieveContext } from './rag/retrieve';
+import { generateEvent } from './ai/eventGen';
 
 // Fixed starting seed: the vertical slice is intentionally deterministic so the
 // client can replay the combat log and match the server exactly (acceptance #6).
@@ -32,6 +38,9 @@ export interface SessionDeps {
   enemyDb: Record<string, Enemy>;
   routes: RouteStore;
   random?: () => number;
+  provider?: AIProvider;          // absent / unavailable → live nodes serve stub text
+  embedder?: EmbeddingProvider;
+  embeddings?: EmbeddingStore;
 }
 
 const DEFAULT_DEPS: SessionDeps = {
@@ -106,15 +115,63 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
     return v;
   }
 
+  function materializeNode(node: StoryNode, overlay?: LiveOverlay): StoryNode {
+    if (!overlay) return node;
+    return {
+      ...node,
+      prose: overlay.prose,
+      choices: node.choices.map((c, i) => ({ ...c, text: overlay.choiceTexts[i] ?? c.text })),
+    };
+  }
+
   function view(save: SaveState, bundle: RouteBundle): SessionView {
-    const node = bundle.nodes[save.currentNodeId];
-    if (!node) throw new GameError(`Node ${save.currentNodeId} not found`, 500);
+    const raw = bundle.nodes[save.currentNodeId];
+    if (!raw) throw new GameError(`Node ${save.currentNodeId} not found`, 500);
+    const node = materializeNode(raw, save.liveNodes?.[save.currentNodeId]);
     return {
       save,
       node,
       effectiveStats: effectiveStats(save.character, deps.itemDb),
       ending: computeEnding(save, bundle.route),
     };
+  }
+
+  function formatPathSummary(save: SaveState): string {
+    const recent = save.choiceLog.slice(-3).map((c) => `${c.nodeId}:${c.choiceId}`).join(', ') || '(none yet)';
+    const rep = save.reputation;
+    const factions = Object.entries(rep.factions).map(([k, v]) => `${k}=${v}`).join(', ') || 'none';
+    return `Recent choices: ${recent}. Reputation hero=${rep.hero}, villain=${rep.villain}, factions: ${factions}.`;
+  }
+
+  // Fill a live node on arrival: generate once, cache in save.liveNodes, persist.
+  // Never throws — any failure degrades to the stub text.
+  async function enrich(id: string, save: SaveState, bundle: RouteBundle): Promise<void> {
+    const nodeId = save.currentNodeId;
+    const node = bundle.nodes[nodeId];
+    if (!node || node.source !== 'live') return;
+    if (save.liveNodes?.[nodeId]) return;
+    const provider = deps.provider;
+    if (!provider || !provider.available) return;
+    try {
+      let ragText = '';
+      if (deps.embedder?.available && deps.embeddings) {
+        ragText = await retrieveContext(
+          { embedder: deps.embedder, embeddings: deps.embeddings },
+          { query: node.prose, novelId: bundle.route.sourceNovelId },
+        );
+      }
+      const { overlay, fallback } = await generateEvent(provider, {
+        stub: node, route: bundle.route, ragText, pathSummary: formatPathSummary(save),
+      });
+      if (!fallback) {
+        save.liveNodes = { ...(save.liveNodes ?? {}), [nodeId]: overlay };
+        await store.put(id, save);
+      }
+    } catch (err) {
+      // Never break play on enrich failure — serve the stub text. Log so a
+      // misconfigured embedder / failing key / DB write is observable in ops.
+      console.warn(`live enrich failed for node ${nodeId}: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   async function load(id: string): Promise<SaveState> {
@@ -162,12 +219,14 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         playedRouteIds: [bundle.route.id],
       };
       const sessionId = await store.create(save);
+      await enrich(sessionId, save, bundle);
       return { sessionId, ...view(save, bundle) };
     },
 
     async getView(id: string) {
       const save = await load(id);
       const bundle = await loadBundle(save.routeId);
+      await enrich(id, save, bundle);
       return withNextRoute(view(save, bundle));
     },
 
@@ -183,6 +242,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       save.playedRouteIds = [...played, nextId];
       // character, reputation, flags, choiceLog, seed are intentionally preserved
       await store.put(id, save);
+      await enrich(id, save, bundle);
       return view(save, bundle);
     },
 
@@ -198,6 +258,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       if (choice.skillCheck) {
         const res = resolveChoice(save, node, choiceId, mulberry32(save.seed));
         await store.put(id, res.save);
+        await enrich(id, res.save, bundle);
         return withNextRoute({ ...view(res.save, bundle), checkPassed: res.checkPassed, roll: res.roll });
       }
 
@@ -218,6 +279,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
           const res = resolveChoice(save, node, choiceId); // apply outcome + advance
           res.save.character.skillPriority = [...skillPriority]; // persist pre-battle ordering
           await store.put(id, res.save);
+          await enrich(id, res.save, bundle);
           return withNextRoute({ ...view(res.save, bundle), combat });
         }
         // Defeat: do not advance or persist progress
@@ -227,6 +289,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       // Path 3: plain advance (no check, no combat)
       const res = resolveChoice(save, node, choiceId);
       await store.put(id, res.save);
+      await enrich(id, res.save, bundle);
       return withNextRoute(view(res.save, bundle));
     },
 

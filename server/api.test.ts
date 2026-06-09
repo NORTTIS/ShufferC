@@ -17,10 +17,11 @@ function app(
   embedder: EmbeddingProvider = createFakeEmbedder(),
 ) {
   const routes = createMemoryRouteStore([structuredClone(SAMPLE_BUNDLE)]);
-  const session = createGameSession(createMemoryStore(), {
-    backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, routes,
-  });
   const { novels, embeddings } = createMemoryNovelStore();
+  const session = createGameSession(createMemoryStore(), {
+    backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+    routes, provider, embedder, embeddings,
+  });
   return createApp(session, {
     provider, routes,
     registries: { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB },
@@ -249,5 +250,51 @@ describe('Admin novels + RAG', () => {
     const t = await token(a);
     const res = await request(a).post('/admin/novels').set('Authorization', `Bearer ${t}`).send({ title: 'N', text: 'x' });
     expect(res.status).toBe(503);
+  });
+});
+
+describe('POST /admin/routes/:id/nodes/:nodeId/source', () => {
+  it('flips a node source and is reflected in the route', async () => {
+    const a = app();
+    const t = await token(a);
+    const auth = { Authorization: `Bearer ${t}` };
+    const res = await request(a).post('/admin/routes/demo-route/nodes/n3/source').set(auth).send({ source: 'live' });
+    expect(res.status).toBe(204);
+    const got = await request(a).get('/admin/routes/demo-route').set(auth);
+    expect(got.body.nodes.n3.source).toBe('live');
+  });
+
+  it('rejects a bad source value with 400', async () => {
+    const a = app();
+    const t = await token(a);
+    const res = await request(a).post('/admin/routes/demo-route/nodes/n3/source').set('Authorization', `Bearer ${t}`).send({ source: 'nope' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for an unknown node', async () => {
+    const a = app();
+    const t = await token(a);
+    const res = await request(a).post('/admin/routes/demo-route/nodes/ghost/source').set('Authorization', `Bearer ${t}`).send({ source: 'live' });
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app()).post('/admin/routes/demo-route/nodes/n3/source').send({ source: 'live' });
+    expect(res.status).toBe(401);
+  });
+
+  it('end-to-end: mark a node live → player sees Flash-enriched prose', async () => {
+    // demo-route n3 is terminal (0 choices) → overlay has 0 choiceTexts.
+    const a = app(createFakeProvider([{ prose: 'a generated ending', choiceTexts: [] }]));
+    const t = await token(a);
+    const auth = { Authorization: `Bearer ${t}` };
+    await request(a).post('/admin/routes/demo-route/nodes/n3/source').set(auth).send({ source: 'live' });
+
+    const created = await request(a).post('/sessions').send({ backgroundId: 'rogue' });
+    const id = created.body.sessionId;
+    const choice = await request(a).post(`/sessions/${id}/choice`).send({ choiceId: 'sneak' }); // n1 → n3
+    expect(choice.status).toBe(200);
+    expect(choice.body.save.currentNodeId).toBe('n3');
+    expect(choice.body.node.prose).toBe('a generated ending');
   });
 });

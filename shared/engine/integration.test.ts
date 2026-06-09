@@ -5,6 +5,7 @@ import { serialize, deserialize } from './save';
 import { mulberry32 } from './dice';
 import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_CHARACTER, SAMPLE_NODES, SAMPLE_ROUTE } from '../fixtures';
 import { SaveState } from '../types';
+import { SAVE_VERSION } from '../constants';
 
 describe('engine integration (hardcoded route)', () => {
   it('runs a combat from fixtures and produces a winner + non-empty log', () => {
@@ -17,7 +18,7 @@ describe('engine integration (hardcoded route)', () => {
 
   it('walks the demo route via choices and reaches the final node', () => {
     let state: SaveState = {
-      version: 1, routeId: SAMPLE_ROUTE.id,
+      version: SAVE_VERSION, routeId: SAMPLE_ROUTE.id,
       character: { ...SAMPLE_CHARACTER, baseStats: { ...SAMPLE_CHARACTER.baseStats } },
       reputation: { hero: 0, villain: 0, factions: {} },
       flags: {}, choiceLog: [], currentNodeId: 'n1', seed: 7,

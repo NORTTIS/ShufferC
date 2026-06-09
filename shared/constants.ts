@@ -9,4 +9,4 @@ export const DICE_MAX_MULT = 2.0;
 export const BASE_HP = 20;
 export const HP_PER_CON = 5;
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
