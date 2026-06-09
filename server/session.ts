@@ -5,7 +5,7 @@ import {
 import { applyRepDelta } from '../shared/engine/reputation';
 import { SAVE_VERSION, EQUIP_SLOTS } from '../shared/constants';
 import { Background, BACKGROUNDS } from '../shared/backgrounds';
-import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
+import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE, ATTRIBUTE_DB, EFFECT_DB } from '../shared/fixtures';
 import { effectiveStats, buildPlayerActor, buildEnemyActor, deriveMaxHp } from '../shared/engine/character';
 import { rollRewards, Rewards } from '../shared/engine/rewards';
 import { runCombat } from '../shared/engine/combat';
@@ -25,6 +25,8 @@ import { generateEvent } from './ai/eventGen';
 // client can replay the combat log and match the server exactly (acceptance #6).
 // A later sub-project will randomise the seed per session.
 const START_SEED = 7;
+const ATTRS = Object.values(ATTRIBUTE_DB);
+const EFFECTS = EFFECT_DB;
 
 export class GameError extends Error {
   constructor(message: string, public status: number) {
@@ -231,7 +233,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         equipped: { ...bg.equipped },
         skillPriority: [...bg.skillPriority],
       };
-      const startHp = deriveMaxHp(effectiveStats(character, deps.itemDb));
+      const startHp = deriveMaxHp(effectiveStats(character, deps.itemDb), ATTRS);
       const save: SaveState = {
         version: SAVE_VERSION,
         routeId: bundle.route.id,
@@ -271,7 +273,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       save.currentNodeId = bundle.route.acts[0].nodeIds[0];
       save.playedRouteIds = [...played, nextId];
       // character, reputation, flags, choiceLog, seed are intentionally preserved
-      save.vitals = { currentHp: deriveMaxHp(effectiveStats(save.character, deps.itemDb)), pendingBuffs: save.vitals.pendingBuffs };
+      save.vitals = { currentHp: deriveMaxHp(effectiveStats(save.character, deps.itemDb), ATTRS), pendingBuffs: save.vitals.pendingBuffs };
       await store.put(id, save);
       await enrich(id, save, bundle);
       return view(save, bundle);
@@ -302,6 +304,8 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
           { ...save.character, skillPriority },
           deps.itemDb,
           deps.skillDb,
+          EFFECTS,
+          ATTRS,
           { startHp: save.vitals.currentHp, extraBuffs: save.vitals.pendingBuffs },
         );
         const enemyDefs = node.combat.enemyIds.map((eid) => {
@@ -310,7 +314,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
           return enemy;
         });
         const enemies = enemyDefs.map((e) => buildEnemyActor(e, deps.skillDb));
-        const combat = runCombat({ player, enemies, seed: save.seed });
+        const combat = runCombat({ player, enemies, seed: save.seed, attrs: ATTRS, effects: EFFECTS });
 
         if (combat.winner === 'player') {
           const res = resolveChoice(save, node, choiceId);
@@ -362,7 +366,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         }
         save.character.equipped[slot as EquipSlot] = itemId;
       }
-      const maxHp = deriveMaxHp(effectiveStats(save.character, deps.itemDb));
+      const maxHp = deriveMaxHp(effectiveStats(save.character, deps.itemDb), ATTRS);
       if (save.vitals.currentHp > maxHp) save.vitals.currentHp = maxHp;
       await store.put(id, save);
       const stored = structuredClone(save);
@@ -402,7 +406,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       if (!item) throw new GameError(`Item ${itemId} not found`, 500); // owned id missing from itemDb = bad data, not user error
       if (item.kind !== 'consumable') throw new GameError(`Item ${itemId} is not consumable`, 400);
 
-      const maxHp = deriveMaxHp(effectiveStats(save.character, deps.itemDb));
+      const maxHp = deriveMaxHp(effectiveStats(save.character, deps.itemDb), ATTRS);
       for (const eff of item.onUse ?? []) {
         if (eff.duration === 0) {
           // instant effects: only heal-over-time restores HP out of combat; other instant kinds are intentionally ignored here
