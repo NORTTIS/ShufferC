@@ -27,3 +27,19 @@ describe('server e2e (hardcoded route)', () => {
     expect(next.save.currentNodeId).toBe('n3');
   });
 });
+
+describe('combat rewards', () => {
+  it('grants gold/xp on a winning fight and carries HP forward', async () => {
+    const s = createGameSession(createMemoryStore());
+    const { sessionId, save } = await s.newGame('fighter');
+    expect(save.gold).toBe(0);
+    const startHp = save.vitals.currentHp;
+    expect(startHp).toBeGreaterThan(0);
+    const res = await s.applyChoice(sessionId, 'fight', ['slash']);
+    expect(res.combat!.winner).toBe('player');
+    expect(res.save.gold).toBeGreaterThan(0);
+    expect(res.save.xp).toBe(25);
+    expect(res.reward).toBeDefined();
+    expect(res.save.vitals.currentHp).toBeLessThanOrEqual(startHp);
+  });
+});

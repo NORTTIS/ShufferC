@@ -10,6 +10,7 @@ function save(): SaveState {
     character: { background: 'rogue', baseStats: { ...baseStats }, inventory: ['torch'], equipped: {}, skillPriority: [] },
     reputation: { hero: 0, villain: 0, factions: {} },
     flags: {}, choiceLog: [], currentNodeId: 'n1', seed: 42,
+    gold: 0, xp: 0, level: 1, consumables: {}, vitals: { currentHp: 40, pendingBuffs: [] },
   };
 }
 

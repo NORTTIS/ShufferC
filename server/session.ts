@@ -5,7 +5,8 @@ import {
 import { SAVE_VERSION, EQUIP_SLOTS } from '../shared/constants';
 import { Background, BACKGROUNDS } from '../shared/backgrounds';
 import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
-import { effectiveStats, buildPlayerActor, buildEnemyActor } from '../shared/engine/character';
+import { effectiveStats, buildPlayerActor, buildEnemyActor, deriveMaxHp } from '../shared/engine/character';
+import { rollRewards, Rewards } from '../shared/engine/rewards';
 import { runCombat } from '../shared/engine/combat';
 import { resolveChoice } from '../shared/engine/story';
 import { mulberry32 } from '../shared/engine/dice';
@@ -64,6 +65,7 @@ export interface ChoiceView extends SessionView {
   checkPassed?: boolean;
   roll?: number;
   combat?: CombatResult;
+  reward?: Rewards;
 }
 
 export interface GameSession {
@@ -216,6 +218,11 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         choiceLog: [],
         currentNodeId: startNodeId,
         seed: START_SEED,
+        gold: 0,
+        xp: 0,
+        level: 1,
+        consumables: {},
+        vitals: { currentHp: deriveMaxHp(effectiveStats({ background: bg.id, baseStats: { ...bg.baseStats }, inventory: [...bg.inventory], equipped: { ...bg.equipped }, skillPriority: [...bg.skillPriority] }, deps.itemDb)), pendingBuffs: [] },
         playedRouteIds: [bundle.route.id],
       };
       const sessionId = await store.create(save);
@@ -241,6 +248,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       save.currentNodeId = bundle.route.acts[0].nodeIds[0];
       save.playedRouteIds = [...played, nextId];
       // character, reputation, flags, choiceLog, seed are intentionally preserved
+      save.vitals = { currentHp: deriveMaxHp(effectiveStats(save.character, deps.itemDb)), pendingBuffs: save.vitals.pendingBuffs };
       await store.put(id, save);
       await enrich(id, save, bundle);
       return view(save, bundle);
@@ -267,22 +275,46 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         if (!skillPriority || skillPriority.length === 0) {
           throw new GameError('skillPriority required for a combat choice', 400);
         }
-        const player = buildPlayerActor({ ...save.character, skillPriority }, deps.itemDb, deps.skillDb);
-        const enemies = node.combat.enemyIds.map((eid) => {
+        const player = buildPlayerActor(
+          { ...save.character, skillPriority },
+          deps.itemDb,
+          deps.skillDb,
+          { startHp: save.vitals.currentHp, extraBuffs: save.vitals.pendingBuffs },
+        );
+        const enemyDefs = node.combat.enemyIds.map((eid) => {
           const enemy = deps.enemyDb[eid];
           if (!enemy) throw new GameError(`Enemy ${eid} not found`, 500);
-          return buildEnemyActor(enemy, deps.skillDb);
+          return enemy;
         });
+        const enemies = enemyDefs.map((e) => buildEnemyActor(e, deps.skillDb));
         const combat = runCombat({ player, enemies, seed: save.seed });
 
         if (combat.winner === 'player') {
-          const res = resolveChoice(save, node, choiceId); // apply outcome + advance
-          res.save.character.skillPriority = [...skillPriority]; // persist pre-battle ordering
+          const res = resolveChoice(save, node, choiceId);
+          res.save.character.skillPriority = [...skillPriority];
+
+          const reward = rollRewards(enemyDefs, mulberry32(save.seed));
+          res.save.gold += reward.gold;
+          res.save.xp += reward.xp;
+          for (const itemId of reward.itemIds) {
+            const item = deps.itemDb[itemId];
+            if (item?.kind === 'consumable') {
+              res.save.consumables[itemId] = (res.save.consumables[itemId] ?? 0) + 1;
+            } else {
+              res.save.character.inventory.push(itemId);
+            }
+          }
+          res.save.reputation.hero += reward.repDelta.hero ?? 0;
+          res.save.reputation.villain += reward.repDelta.villain ?? 0;
+          for (const [f, v] of Object.entries(reward.repDelta.factions ?? {})) {
+            res.save.reputation.factions[f] = (res.save.reputation.factions[f] ?? 0) + v;
+          }
+          res.save.vitals = { currentHp: player.hp, pendingBuffs: [] };
+
           await store.put(id, res.save);
           await enrich(id, res.save, bundle);
-          return withNextRoute({ ...view(res.save, bundle), combat });
+          return withNextRoute({ ...view(res.save, bundle), combat, reward });
         }
-        // Defeat: do not advance or persist progress
         return { ...view(save, bundle), combat, ending: 'defeat' };
       }
 

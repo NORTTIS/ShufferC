@@ -22,6 +22,7 @@ describe('engine integration (hardcoded route)', () => {
       character: { ...SAMPLE_CHARACTER, baseStats: { ...SAMPLE_CHARACTER.baseStats } },
       reputation: { hero: 0, villain: 0, factions: {} },
       flags: {}, choiceLog: [], currentNodeId: 'n1', seed: 7,
+      gold: 0, xp: 0, level: 1, consumables: {}, vitals: { currentHp: 40, pendingBuffs: [] },
     };
     const rng = mulberry32(state.seed);
     state = resolveChoice(state, SAMPLE_NODES['n1'], 'sneak', rng).save;
