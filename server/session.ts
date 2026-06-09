@@ -33,6 +33,10 @@ export class GameError extends Error {
   }
 }
 
+function resolvePrice(entry: { price?: number }, item: { cost?: number }): number {
+  return entry.price ?? item.cost ?? 0;
+}
+
 export interface SessionDeps {
   backgrounds: Record<string, Background>;
   itemDb: Record<string, Item>;
@@ -186,6 +190,15 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
     const save = await store.get(id);
     if (!save) throw new GameError(`Session ${id} not found`, 404);
     return save;
+  }
+
+  // Load the save + the current node, asserting it has a merchant.
+  async function loadMerchantNode(id: string): Promise<{ save: SaveState; node: StoryNode }> {
+    const save = await load(id);
+    const bundle = await loadBundle(save.routeId);
+    const node = bundle.nodes[save.currentNodeId];
+    if (!node?.merchant) throw new GameError('No merchant at this node', 400);
+    return { save, node };
   }
 
   return {
@@ -353,28 +366,22 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
     },
 
     async getShop(id) {
-      const save = await load(id);
-      const bundle = await loadBundle(save.routeId);
-      const node = bundle.nodes[save.currentNodeId];
-      if (!node?.merchant) throw new GameError('No merchant at this node', 400);
-      const stock = node.merchant.stock.map((s) => {
+      const { node } = await loadMerchantNode(id);
+      const stock = node.merchant!.stock.map((s) => {
         const item = deps.itemDb[s.itemId];
-        if (!item) throw new GameError(`Item ${s.itemId} not found`, 500);
-        return { item, price: s.price ?? item.cost ?? 0 };
+        if (!item) throw new GameError(`Item ${s.itemId} not found`, 500); // stock comes from admin/seed config; a gap is bad data, not user error
+        return { item, price: resolvePrice(s, item) };
       });
       return { stock };
     },
 
     async buy(id, itemId) {
-      const save = await load(id);
-      const bundle = await loadBundle(save.routeId);
-      const node = bundle.nodes[save.currentNodeId];
-      if (!node?.merchant) throw new GameError('No merchant at this node', 400);
-      const entry = node.merchant.stock.find((s) => s.itemId === itemId);
+      const { save, node } = await loadMerchantNode(id);
+      const entry = node.merchant!.stock.find((s) => s.itemId === itemId);
       if (!entry) throw new GameError(`Item ${itemId} not sold here`, 400);
       const item = deps.itemDb[itemId];
-      if (!item) throw new GameError(`Item ${itemId} not found`, 500);
-      const price = entry.price ?? item.cost ?? 0;
+      if (!item) throw new GameError(`Item ${itemId} not found`, 500); // see getShop: missing stock item = bad config
+      const price = resolvePrice(entry, item);
       if (save.gold < price) throw new GameError('Not enough gold', 400);
       save.gold -= price;
       if (item.kind === 'consumable') save.consumables[itemId] = (save.consumables[itemId] ?? 0) + 1;
