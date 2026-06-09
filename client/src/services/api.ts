@@ -2,6 +2,7 @@ import type {
   SaveState, StoryNode, Stats, CombatResult, Item,
 } from '../../../shared/types';
 import type { Background } from '../../../shared/backgrounds';
+import type { Rewards } from '../../../shared/engine/rewards';
 import { config } from '../config';
 
 export class ApiError extends Error {
@@ -22,7 +23,7 @@ export interface ChoiceView extends SessionView {
   checkPassed?: boolean;
   roll?: number;
   combat?: CombatResult;
-  reward?: Reward;
+  reward?: Rewards;
 }
 export interface NewGameView extends SessionView {
   sessionId: string;
@@ -33,7 +34,6 @@ export interface EquipView {
 }
 export interface ShopView { stock: { item: Item; price: number }[] }
 export interface ShopActionView { save: SaveState; effectiveStats: Stats }
-export interface Reward { gold: number; xp: number; itemIds: string[]; repDelta: { hero?: number; villain?: number; factions?: Record<string, number> } }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${config.apiBase}${path}`, {

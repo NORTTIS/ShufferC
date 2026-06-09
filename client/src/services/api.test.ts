@@ -38,6 +38,7 @@ describe('gameApi shop/use', () => {
     ok({ stock: [{ item: { id: 'dagger' }, price: 5 }] });
     const res = await gameApi.getShop('s1');
     expect(res.stock[0].price).toBe(5);
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/sessions/s1/shop'), expect.anything());
   });
   it('buy POSTs the itemId', async () => {
     ok({ save: {}, effectiveStats: {} });
