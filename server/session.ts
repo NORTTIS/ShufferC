@@ -1,7 +1,8 @@
 import {
   SaveState, StoryNode, Stats, Item, Skill, Enemy, EquipSlot, CombatResult, GameRoute, RouteBundle,
-  LiveOverlay,
+  LiveOverlay, CharacterState,
 } from '../shared/types';
+import { applyRepDelta } from '../shared/engine/reputation';
 import { SAVE_VERSION, EQUIP_SLOTS } from '../shared/constants';
 import { Background, BACKGROUNDS } from '../shared/backgrounds';
 import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
@@ -203,16 +204,18 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         throw new GameError(`Route ${resolvedRouteId} is not published`, 409);
       }
       const startNodeId = bundle.route.acts[0].nodeIds[0];
+      const character: CharacterState = {
+        background: bg.id,
+        baseStats: { ...bg.baseStats },
+        inventory: [...bg.inventory],
+        equipped: { ...bg.equipped },
+        skillPriority: [...bg.skillPriority],
+      };
+      const startHp = deriveMaxHp(effectiveStats(character, deps.itemDb));
       const save: SaveState = {
         version: SAVE_VERSION,
         routeId: bundle.route.id,
-        character: {
-          background: bg.id,
-          baseStats: { ...bg.baseStats },
-          inventory: [...bg.inventory],
-          equipped: { ...bg.equipped },
-          skillPriority: [...bg.skillPriority],
-        },
+        character,
         reputation: { hero: 0, villain: 0, factions: {} },
         flags: {},
         choiceLog: [],
@@ -222,7 +225,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         xp: 0,
         level: 1,
         consumables: {},
-        vitals: { currentHp: deriveMaxHp(effectiveStats({ background: bg.id, baseStats: { ...bg.baseStats }, inventory: [...bg.inventory], equipped: { ...bg.equipped }, skillPriority: [...bg.skillPriority] }, deps.itemDb)), pendingBuffs: [] },
+        vitals: { currentHp: startHp, pendingBuffs: [] },
         playedRouteIds: [bundle.route.id],
       };
       const sessionId = await store.create(save);
@@ -304,11 +307,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
               res.save.character.inventory.push(itemId);
             }
           }
-          res.save.reputation.hero += reward.repDelta.hero ?? 0;
-          res.save.reputation.villain += reward.repDelta.villain ?? 0;
-          for (const [f, v] of Object.entries(reward.repDelta.factions ?? {})) {
-            res.save.reputation.factions[f] = (res.save.reputation.factions[f] ?? 0) + v;
-          }
+          applyRepDelta(res.save.reputation, reward.repDelta);
           res.save.vitals = { currentHp: player.hp, pendingBuffs: [] };
 
           await store.put(id, res.save);
