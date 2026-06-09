@@ -29,6 +29,10 @@ describe('rollRewards', () => {
 
   it('is deterministic for a given seed', () => {
     const ranged: Enemy = { id: 'g4', name: 'G4', ...base, reward: { gold: [1, 100] } };
-    expect(rollRewards([ranged], mulberry32(99)).gold).toBe(rollRewards([ranged], mulberry32(99)).gold);
+    const first = rollRewards([ranged], mulberry32(99)).gold;
+    const second = rollRewards([ranged], mulberry32(99)).gold;
+    expect(first).toBe(second);
+    expect(first).toBeGreaterThanOrEqual(1);
+    expect(first).toBeLessThanOrEqual(100);
   });
 });

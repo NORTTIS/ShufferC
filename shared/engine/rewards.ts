@@ -13,7 +13,9 @@ export function rollRewards(defeated: Enemy[], rng: RNG): Rewards {
   let gold = 0;
   let xp = 0;
   const itemIds: string[] = [];
-  const repDelta: ReputationDelta = { hero: 0, villain: 0, factions: {} };
+  let hero = 0;
+  let villain = 0;
+  const factions: Record<string, number> = {};
 
   for (const e of defeated) {
     const r = e.reward;
@@ -27,12 +29,12 @@ export function rollRewards(defeated: Enemy[], rng: RNG): Rewards {
       if (rng() < d.chance) itemIds.push(d.itemId);
     }
     if (r.reputationDelta) {
-      repDelta.hero = (repDelta.hero ?? 0) + (r.reputationDelta.hero ?? 0);
-      repDelta.villain = (repDelta.villain ?? 0) + (r.reputationDelta.villain ?? 0);
+      hero += r.reputationDelta.hero ?? 0;
+      villain += r.reputationDelta.villain ?? 0;
       for (const [f, v] of Object.entries(r.reputationDelta.factions ?? {})) {
-        repDelta.factions![f] = (repDelta.factions![f] ?? 0) + v;
+        factions[f] = (factions[f] ?? 0) + v;
       }
     }
   }
-  return { gold, xp, itemIds, repDelta };
+  return { gold, xp, itemIds, repDelta: { hero, villain, factions } };
 }
