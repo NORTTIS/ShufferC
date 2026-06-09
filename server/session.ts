@@ -75,6 +75,7 @@ export interface ChoiceView extends SessionView {
 
 export interface ShopView { stock: { item: Item; price: number }[] }
 export interface BuyView { save: SaveState; effectiveStats: Stats }
+export interface UseView { save: SaveState; effectiveStats: Stats }
 
 export interface GameSession {
   listBackgrounds(): Background[];
@@ -85,6 +86,7 @@ export interface GameSession {
   equip(id: string, slot: string, itemId: string | null): Promise<{ save: SaveState; effectiveStats: Stats }>;
   getShop(id: string): Promise<ShopView>;
   buy(id: string, itemId: string): Promise<BuyView>;
+  useItem(id: string, itemId: string): Promise<UseView>;
 }
 
 export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_DEPS): GameSession {
@@ -386,6 +388,31 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       save.gold -= price;
       if (item.kind === 'consumable') save.consumables[itemId] = (save.consumables[itemId] ?? 0) + 1;
       else save.character.inventory.push(itemId);
+      await store.put(id, save);
+      const stored = structuredClone(save);
+      return { save: stored, effectiveStats: effectiveStats(stored.character, deps.itemDb) };
+    },
+
+    async useItem(id, itemId) {
+      const save = await load(id);
+      if ((save.consumables[itemId] ?? 0) <= 0) throw new GameError(`Item ${itemId} not owned`, 400);
+      const item = deps.itemDb[itemId];
+      if (!item) throw new GameError(`Item ${itemId} not found`, 400);
+      if (item.kind !== 'consumable') throw new GameError(`Item ${itemId} is not consumable`, 400);
+
+      const maxHp = deriveMaxHp(effectiveStats(save.character, deps.itemDb));
+      for (const eff of item.onUse ?? []) {
+        if (eff.duration === 0) {
+          if (eff.kind === 'hot') {
+            save.vitals.currentHp = Math.min(maxHp, save.vitals.currentHp + (eff.magnitude ?? 0));
+          }
+        } else {
+          save.vitals.pendingBuffs.push(eff);
+        }
+      }
+      save.consumables[itemId] -= 1;
+      if (save.consumables[itemId] <= 0) delete save.consumables[itemId];
+
       await store.put(id, save);
       const stored = structuredClone(save);
       return { save: stored, effectiveStats: effectiveStats(stored.character, deps.itemDb) };

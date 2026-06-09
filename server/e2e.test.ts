@@ -64,3 +64,22 @@ describe('shop', () => {
     await expect(s.buy(sessionId, 'dagger')).rejects.toMatchObject({ status: 400 });
   });
 });
+
+describe('useItem', () => {
+  it('uses a healing potion won from combat: restores HP (clamped) and consumes it', async () => {
+    const s = createGameSession(createMemoryStore());
+    const { sessionId } = await s.newGame('fighter');
+    const after = await s.applyChoice(sessionId, 'fight', ['slash']); // win → goblin drops healPotion (chance 1)
+    expect(after.save.consumables.healPotion).toBe(1);
+    const hpAfterFight = after.save.vitals.currentHp;
+    const used = await s.useItem(sessionId, 'healPotion');
+    expect(used.save.consumables.healPotion).toBeUndefined();             // consumed (qty 0 → key deleted)
+    expect(used.save.vitals.currentHp).toBeGreaterThanOrEqual(hpAfterFight); // healed, clamped to maxHp
+  });
+
+  it('rejects using an item not owned', async () => {
+    const s = createGameSession(createMemoryStore());
+    const { sessionId } = await s.newGame('fighter');
+    await expect(s.useItem(sessionId, 'healPotion')).rejects.toMatchObject({ status: 400 });
+  });
+});
