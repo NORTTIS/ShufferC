@@ -74,7 +74,7 @@ export interface SaveState {
 }
 ```
 
-`SAVE_VERSION` bumps (`1 → 2`). The save round-trip test updates to the new version; `liveNodes` is optional so older saves deserialize fine (absent ⇒ all nodes serve stub text).
+`SAVE_VERSION` bumps (`1 → 2`). The save round-trip test updates to the new version; `liveNodes` is optional so it is **forward-compatible within v2** — a v2 save without `liveNodes` deserializes fine and serves stub text for all live nodes. There is no v1→v2 migration: `deserialize` throws on any version mismatch, but the project's saves are fresh/ephemeral so this is acceptable.
 
 ---
 

@@ -372,4 +372,31 @@ describe('GameSession live event-gen', () => {
     const res = await s.newGame('rogue', 'live-route');
     expect(res.node.prose).toBe('stub prose');
   });
+
+  it('enriches a live node reached via applyChoice (choice text overlaid)', async () => {
+    const advBundle: RouteBundle = {
+      route: {
+        id: 'adv-route', title: 'Adv', sourceNovelId: 'adhoc',
+        acts: [{ id: 'a1', title: 'A', nodeIds: ['p1', 'L1', 'end'] }],
+        itemPool: [], enemyPool: [], endings: [{ id: 'e', title: 'E', condition: 'currentNodeId === end' }],
+        status: 'published',
+      },
+      nodes: {
+        p1: { id: 'p1', source: 'pregen', prose: 'start', choices: [{ id: 'adv', text: 'advance', nextNodeId: 'L1' }] },
+        L1: { id: 'L1', source: 'live', prose: 'live stub', choices: [{ id: 'go', text: 'stub go', nextNodeId: 'end' }] },
+        end: { id: 'end', source: 'pregen', prose: 'fin', choices: [] },
+      },
+    };
+    const overlay = { prose: 'enriched live prose', choiceTexts: ['enriched go'] };
+    const s = createGameSession(createMemoryStore(), {
+      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      routes: createMemoryRouteStore([advBundle]), provider: createFakeProvider([overlay]),
+    });
+    const { sessionId } = await s.newGame('rogue', 'adv-route'); // starts at pregen p1 → no provider call
+    const after = await s.applyChoice(sessionId, 'adv');         // advances to live L1 → enrich fires
+    expect(after.save.currentNodeId).toBe('L1');
+    expect(after.node.prose).toBe('enriched live prose');
+    expect(after.node.choices[0].text).toBe('enriched go');
+    expect(after.save.liveNodes!['L1']).toEqual(overlay);
+  });
 });
