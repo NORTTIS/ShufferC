@@ -63,4 +63,16 @@ describe('buildJournal', () => {
     ]));
     expect(j[0].reward).toEqual(reward);
   });
+
+  it('returns an empty journal for an empty choiceLog', () => {
+    expect(buildJournal(SAMPLE_BUNDLE, save([]))).toEqual([]);
+  });
+
+  it('falls back to the raw choice text when an overlay choiceTexts is too short', () => {
+    const j = buildJournal(SAMPLE_BUNDLE, save(
+      [{ nodeId: 'n1', choiceId: 'sneak', routeId: 'demo-route' }],
+      { n1: { prose: 'Mist coils around the gate.', choiceTexts: ['Cut them down'] } }, // index 1 missing
+    ));
+    expect(j[0].chosenText).toBe('Sneak past');
+  });
 });
