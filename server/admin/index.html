@@ -5,98 +5,220 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ShufferC Admin</title>
   <style>
-    :root { --bg:#0f1117; --card:#1a1d27; --fg:#e6e8ee; --muted:#8a90a2; --accent:#5b8cff; --ok:#3fb950; --warn:#d29922; --err:#f85149; }
+    :root { --bg:#0f1117; --card:#1a1d27; --fg:#e6e8ee; --muted:#8a90a2; --accent:#5b8cff; --ok:#3fb950; --warn:#d29922; --err:#f85149; --line:#2a2e3a; }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); }
-    header { padding:16px 24px; border-bottom:1px solid #2a2e3a; display:flex; justify-content:space-between; align-items:center; }
+    html, body { height:100%; }
+    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); display:flex; flex-direction:column; }
+    header { padding:14px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:16px; flex:0 0 auto; }
     h1 { font-size:18px; margin:0; }
-    main { max-width:880px; margin:0 auto; padding:24px; }
-    .card { background:var(--card); border:1px solid #2a2e3a; border-radius:10px; padding:18px; margin-bottom:18px; }
+    .headline { display:flex; align-items:center; gap:14px; }
+    .pill { font-size:12px; padding:3px 9px; border:1px solid var(--line); border-radius:999px; color:var(--muted); }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:18px; }
     label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
-    input, textarea, select { width:100%; padding:9px 11px; background:#0c0e14; color:var(--fg); border:1px solid #2a2e3a; border-radius:6px; font:inherit; }
+    input, textarea, select { width:100%; padding:9px 11px; background:#0c0e14; color:var(--fg); border:1px solid var(--line); border-radius:6px; font:inherit; }
     textarea { min-height:140px; resize:vertical; }
     button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 16px; font:inherit; cursor:pointer; }
     button.secondary { background:#2a2e3a; }
     button:disabled { opacity:.5; cursor:default; }
     table { width:100%; border-collapse:collapse; margin-top:8px; }
-    th, td { text-align:left; padding:8px 6px; border-bottom:1px solid #2a2e3a; font-size:14px; }
+    th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); font-size:14px; }
     .status { font-size:13px; }
     .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); }
-    pre { background:#0c0e14; padding:12px; border-radius:6px; overflow:auto; max-height:320px; font-size:12px; }
+    pre { background:#0c0e14; padding:12px; border-radius:6px; overflow:auto; font-size:12px; margin:0; }
     .hidden { display:none; }
     .row { display:flex; gap:12px; }
     .row > div { flex:1; }
     .msg { margin-top:10px; font-size:13px; }
+
+    /* Login centered */
+    #login { max-width:420px; margin:48px auto; }
+
+    /* App shell: sidebar + content */
+    .layout { flex:1 1 auto; display:flex; min-height:0; }
+    .sidebar { flex:0 0 200px; border-right:1px solid var(--line); padding:18px 12px; display:flex; flex-direction:column; gap:6px; }
+    .navbtn { display:block; width:100%; text-align:left; background:transparent; color:var(--muted); padding:10px 12px; border-radius:8px; font:inherit; }
+    .navbtn:hover { background:#161922; color:var(--fg); }
+    .navbtn.active { background:#222637; color:var(--fg); }
+    .content { flex:1 1 auto; min-width:0; overflow:auto; padding:24px; }
+    .content-inner { max-width:880px; margin:0 auto; }
+
+    /* Route detail split screen */
+    .detail-head { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+    .detail-head h2 { margin:0; font-size:16px; }
+    .split { display:flex; gap:16px; align-items:flex-start; }
+    .split > .pane { flex:1 1 50%; min-width:0; }
+    .pane h3 { margin:0 0 8px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .pane pre { max-height:70vh; }
+    .nodes-scroll { max-height:70vh; overflow:auto; padding-right:4px; }
+    @media (max-width: 760px) { .split { flex-direction:column; } .split > .pane { flex-basis:auto; width:100%; } }
   </style>
 </head>
 <body>
   <header>
-    <h1>ShufferC Admin</h1>
+    <div class="headline">
+      <h1>ShufferC Admin</h1>
+      <span id="statusPill" class="pill hidden">checking…</span>
+    </div>
     <button id="logout" class="secondary hidden">Log out</button>
   </header>
-  <main>
-    <!-- Login -->
-    <section id="login" class="card">
-      <h2 style="margin-top:0;font-size:15px;">Log in</h2>
-      <label>Email</label>
-      <input id="email" type="email" autocomplete="username" />
-      <label>Password</label>
-      <input id="password" type="password" autocomplete="current-password" />
-      <div style="margin-top:14px;"><button id="loginBtn">Log in</button></div>
-      <div id="loginMsg" class="msg err"></div>
-    </section>
 
-    <!-- Console -->
-    <div id="console" class="hidden">
-      <section class="card">
-        <div id="status" class="status">Checking provider…</div>
-      </section>
+  <!-- Login -->
+  <section id="login" class="card">
+    <h2 style="margin-top:0;font-size:15px;">Log in</h2>
+    <label>Email</label>
+    <input id="email" type="email" autocomplete="username" />
+    <label>Password</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <div style="margin-top:14px;"><button id="loginBtn">Log in</button></div>
+    <div id="loginMsg" class="msg err"></div>
+  </section>
 
-      <section class="card">
-        <h2 style="margin-top:0;font-size:15px;">Novels (RAG source)</h2>
-        <label>Title</label>
-        <input id="novelTitle" placeholder="Moby Dick" />
-        <label>Full text</label>
-        <textarea id="novelText" placeholder="Paste the novel / source text. It is chunked and embedded into pgvector."></textarea>
-        <div style="margin-top:14px;"><button id="novelBtn">Upload &amp; embed</button></div>
-        <div id="novelMsg" class="msg"></div>
-        <table>
-          <thead><tr><th>ID</th><th>Title</th><th>Chunks</th><th>Status</th><th></th></tr></thead>
-          <tbody id="novelsBody"></tbody>
-        </table>
-      </section>
+  <!-- App shell -->
+  <div id="console" class="layout hidden">
+    <aside class="sidebar">
+      <button class="navbtn active" data-view="routes">Routes</button>
+      <button class="navbtn" data-view="novels">Novels</button>
+      <button class="navbtn" data-view="status">Status</button>
+      <button class="navbtn" data-view="attributes">Attributes</button>
+      <button class="navbtn" data-view="effects">Effects</button>
+      <button class="navbtn" data-view="items">Items</button>
+      <button class="navbtn" data-view="skills">Skills</button>
+      <button class="navbtn" data-view="enemies">Enemies</button>
+    </aside>
 
-      <section class="card">
-        <h2 style="margin-top:0;font-size:15px;">Generate a route</h2>
-        <div class="row">
-          <div><label>Title</label><input id="title" placeholder="The Bridge" /></div>
-          <div><label>Node count</label><input id="nodeCount" type="number" value="4" min="3" max="8" /></div>
+    <div class="content">
+      <div class="content-inner">
+
+        <!-- ===== Routes view ===== -->
+        <div id="view-routes" class="view">
+          <!-- list sub-screen -->
+          <div id="routes-list">
+            <section class="card">
+              <h2 style="margin-top:0;font-size:15px;">Generate a route</h2>
+              <div class="row">
+                <div><label>Title</label><input id="title" placeholder="The Bridge" /></div>
+                <div><label>Node count</label><input id="nodeCount" type="number" value="4" min="3" max="8" /></div>
+              </div>
+              <label>Ground in a novel (optional — RAG)</label>
+              <select id="novelSelect">
+                <option value="">— none: use raw source text below —</option>
+              </select>
+              <label>Retrieval query (optional; defaults to the title)</label>
+              <input id="ragQuery" placeholder="e.g. the hero's first battle" />
+              <label>Source text (used only when no novel is selected)</label>
+              <textarea id="contextText" placeholder="Paste a few paragraphs of source material…"></textarea>
+              <div style="margin-top:14px;"><button id="genBtn">Generate</button></div>
+              <div id="genMsg" class="msg"></div>
+              <pre id="genOut" class="hidden"></pre>
+            </section>
+
+            <section class="card">
+              <h2 style="margin-top:0;font-size:15px;">Routes</h2>
+              <table>
+                <thead><tr><th>ID</th><th>Title</th><th>Status</th><th></th></tr></thead>
+                <tbody id="routesBody"></tbody>
+              </table>
+            </section>
+          </div>
+
+          <!-- detail sub-screen (View JSON) -->
+          <div id="routes-detail" class="hidden">
+            <div class="detail-head">
+              <button id="detailBack" class="secondary">← Back</button>
+              <h2 id="detailTitle">Route</h2>
+            </div>
+            <div class="split">
+              <div class="pane">
+                <h3>JSON</h3>
+                <pre id="viewOut"></pre>
+              </div>
+              <div class="pane">
+                <h3>Nodes — source &amp; merchant stock</h3>
+                <div id="nodeMsg" class="msg"></div>
+                <div id="nodesOut" class="nodes-scroll"></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <label>Ground in a novel (optional — RAG)</label>
-        <select id="novelSelect">
-          <option value="">— none: use raw source text below —</option>
-        </select>
-        <label>Retrieval query (optional; defaults to the title)</label>
-        <input id="ragQuery" placeholder="e.g. the hero's first battle" />
-        <label>Source text (used only when no novel is selected)</label>
-        <textarea id="contextText" placeholder="Paste a few paragraphs of source material…"></textarea>
-        <div style="margin-top:14px;"><button id="genBtn">Generate</button></div>
-        <div id="genMsg" class="msg"></div>
-        <pre id="genOut" class="hidden"></pre>
-      </section>
 
-      <section class="card">
-        <h2 style="margin-top:0;font-size:15px;">Routes</h2>
-        <table>
-          <thead><tr><th>ID</th><th>Title</th><th>Status</th><th></th></tr></thead>
-          <tbody id="routesBody"></tbody>
-        </table>
-        <pre id="viewOut" class="hidden"></pre>
-        <div id="nodeMsg" class="msg"></div>
-        <div id="nodesOut" class="hidden"></div>
-      </section>
+        <!-- ===== Novels view ===== -->
+        <div id="view-novels" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Novels (RAG source)</h2>
+            <label>Title</label>
+            <input id="novelTitle" placeholder="Moby Dick" />
+            <label>Full text</label>
+            <textarea id="novelText" placeholder="Paste the novel / source text. It is chunked and embedded into pgvector."></textarea>
+            <div style="margin-top:14px;"><button id="novelBtn">Upload &amp; embed</button></div>
+            <div id="novelMsg" class="msg"></div>
+            <table>
+              <thead><tr><th>ID</th><th>Title</th><th>Chunks</th><th>Status</th><th></th></tr></thead>
+              <tbody id="novelsBody"></tbody>
+            </table>
+          </section>
+        </div>
+
+        <!-- ===== Status view ===== -->
+        <div id="view-status" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Provider status</h2>
+            <div id="status" class="status">Checking provider…</div>
+          </section>
+        </div>
+
+        <!-- ===== Attributes view ===== -->
+        <div id="view-attributes" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Attributes</h2>
+            <div id="attributes-form"></div>
+            <div id="attributes-msg" class="msg"></div>
+            <table><thead><tr id="attributes-head"></tr></thead><tbody id="attributes-body"></tbody></table>
+          </section>
+        </div>
+
+        <!-- ===== Effects view ===== -->
+        <div id="view-effects" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Effects</h2>
+            <div id="effects-form"></div>
+            <div id="effects-msg" class="msg"></div>
+            <table><thead><tr id="effects-head"></tr></thead><tbody id="effects-body"></tbody></table>
+          </section>
+        </div>
+
+        <!-- ===== Items view ===== -->
+        <div id="view-items" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Items</h2>
+            <div id="items-form"></div>
+            <div id="items-msg" class="msg"></div>
+            <table><thead><tr id="items-head"></tr></thead><tbody id="items-body"></tbody></table>
+          </section>
+        </div>
+
+        <!-- ===== Skills view ===== -->
+        <div id="view-skills" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Skills</h2>
+            <div id="skills-form"></div>
+            <div id="skills-msg" class="msg"></div>
+            <table><thead><tr id="skills-head"></tr></thead><tbody id="skills-body"></tbody></table>
+          </section>
+        </div>
+
+        <!-- ===== Enemies view ===== -->
+        <div id="view-enemies" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Enemies</h2>
+            <div id="enemies-form"></div>
+            <div id="enemies-msg" class="msg"></div>
+            <table><thead><tr id="enemies-head"></tr></thead><tbody id="enemies-body"></tbody></table>
+          </section>
+        </div>
+
+      </div>
     </div>
-  </main>
+  </div>
 
   <script>
     const TOKEN_KEY = 'shufferc_admin_token';
@@ -117,12 +239,35 @@
       $('login').classList.toggle('hidden', on);
       $('console').classList.toggle('hidden', !on);
       $('logout').classList.toggle('hidden', !on);
+      $('statusPill').classList.toggle('hidden', !on);
     }
 
     function logout() {
       token = '';
       localStorage.removeItem(TOKEN_KEY);
       showConsole(false);
+    }
+
+    // ---- Sidebar tab switching ----
+    function selectView(name) {
+      for (const btn of document.querySelectorAll('.navbtn')) {
+        btn.classList.toggle('active', btn.dataset.view === name);
+      }
+      for (const v of document.querySelectorAll('.view')) {
+        v.classList.toggle('hidden', v.id !== ('view-' + name));
+      }
+      // Leaving routes always returns to the list sub-screen.
+      if (name === 'routes') showRoutesList();
+    }
+
+    function showRoutesList() {
+      $('routes-list').classList.remove('hidden');
+      $('routes-detail').classList.add('hidden');
+    }
+
+    function showRoutesDetail() {
+      $('routes-list').classList.add('hidden');
+      $('routes-detail').classList.remove('hidden');
     }
 
     async function doLogin() {
@@ -136,6 +281,7 @@
         token = body.token;
         localStorage.setItem(TOKEN_KEY, token);
         showConsole(true);
+        selectView('routes');
         await Promise.all([loadStatus(), loadRoutes(), loadNovels()]);
       } catch (e) {
         $('loginMsg').textContent = e.status === 401 ? 'Invalid credentials.' : ('Login failed: ' + e.message);
@@ -144,12 +290,20 @@
 
     async function loadStatus() {
       const s = $('status');
+      const pill = $('statusPill');
       try {
         const body = await api('/admin/status', { headers: authHeaders() });
-        s.innerHTML = body.providerAvailable
-          ? 'Gemini provider: <span class="ok">available</span>'
-          : 'Gemini provider: <span class="warn">not configured</span> — set GEMINI_API_KEY in .env to enable generation.';
-      } catch (e) { s.innerHTML = '<span class="err">Status error: ' + e.message + '</span>'; }
+        if (body.providerAvailable) {
+          s.innerHTML = 'Gemini provider: <span class="ok">available</span>';
+          pill.textContent = 'Gemini: available'; pill.style.color = 'var(--ok)';
+        } else {
+          s.innerHTML = 'Gemini provider: <span class="warn">not configured</span> — set GEMINI_API_KEY in .env to enable generation.';
+          pill.textContent = 'Gemini: off'; pill.style.color = 'var(--warn)';
+        }
+      } catch (e) {
+        s.innerHTML = '<span class="err">Status error: ' + e.message + '</span>';
+        pill.textContent = 'status error'; pill.style.color = 'var(--err)';
+      }
     }
 
     async function loadRoutes() {
@@ -181,20 +335,18 @@
 
     async function viewRoute(id) {
       const bundle = await api('/admin/routes/' + id, { headers: authHeaders() });
-      const out = $('viewOut'); out.classList.remove('hidden');
-      out.textContent = JSON.stringify(bundle, null, 2);
+      $('detailTitle').textContent = (bundle.route && bundle.route.title ? bundle.route.title : 'Route') + ' — ' + id;
+      $('viewOut').textContent = JSON.stringify(bundle, null, 2);
       renderNodes(id, bundle);
+      showRoutesDetail();
     }
 
     function renderNodes(routeId, bundle) {
-      const box = $('nodesOut'); box.classList.remove('hidden'); box.innerHTML = '';
-      const h = document.createElement('h3');
-      h.style.fontSize = '13px'; h.textContent = 'Nodes — live AI generation & merchant stock';
-      box.appendChild(h);
+      const box = $('nodesOut'); box.innerHTML = '';
       const pool = Array.isArray(bundle.route && bundle.route.itemPool) ? bundle.route.itemPool : [];
       if (pool.length) {
         const hint = document.createElement('div');
-        hint.className = 'status muted';
+        hint.className = 'status';
         hint.style.color = 'var(--muted)'; hint.style.fontSize = '12px'; hint.style.marginBottom = '8px';
         hint.textContent = 'Route itemPool: ' + pool.join(', ');
         box.appendChild(hint);
@@ -202,7 +354,7 @@
       for (const nid of Object.keys(bundle.nodes)) {
         const node = bundle.nodes[nid];
         const card = document.createElement('div');
-        card.style.border = '1px solid #2a2e3a'; card.style.borderRadius = '6px';
+        card.style.border = '1px solid var(--line)'; card.style.borderRadius = '6px';
         card.style.padding = '10px'; card.style.margin = '8px 0';
 
         // Source toggle row
@@ -279,7 +431,7 @@
         msg.textContent = stock === null
           ? (nodeId + ' merchant cleared')
           : (nodeId + ' merchant set (' + stock.length + ' item' + (stock.length === 1 ? '' : 's') + ')');
-        await viewRoute(routeId); // refresh node list + JSON
+        await viewRoute(routeId); // refresh node list + JSON (stays on detail)
       } catch (e) {
         msg.className = 'msg err';
         msg.textContent = e.status === 404 ? 'Route or node not found.' : ('Error: ' + e.message);
@@ -293,7 +445,7 @@
           method: 'POST', headers: authHeaders(), body: JSON.stringify({ source }),
         });
         msg.className = 'msg ok'; msg.textContent = nodeId + ' → ' + source;
-        await viewRoute(routeId); // refresh node list + JSON
+        await viewRoute(routeId); // refresh node list + JSON (stays on detail)
       } catch (e) {
         msg.className = 'msg err';
         msg.textContent = e.status === 404 ? 'Route or node not found.' : ('Error: ' + e.message);
@@ -401,10 +553,21 @@
     $('logout').onclick = logout;
     $('genBtn').onclick = doGenerate;
     $('novelBtn').onclick = uploadNovel;
+    $('detailBack').onclick = showRoutesList;
+    for (const btn of document.querySelectorAll('.navbtn')) {
+      btn.onclick = () => selectView(btn.dataset.view);
+    }
 
     // Boot: if we already hold a token, try the console; a stale token bounces back to login on the first 401.
-    if (token) { showConsole(true); loadStatus(); loadRoutes().catch(() => {}); loadNovels().catch(() => {}); }
-    else { showConsole(false); }
+    if (token) {
+      showConsole(true);
+      selectView('routes');
+      loadStatus();
+      loadRoutes().catch(() => {});
+      loadNovels().catch(() => {});
+    } else {
+      showConsole(false);
+    }
   </script>
 </body>
 </html>
