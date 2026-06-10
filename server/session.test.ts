@@ -1,8 +1,9 @@
 import { createGameSession, GameError } from './session';
 import { createMemoryStore } from './store/memoryStore';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
+import { createMemoryContentStores } from './store/contentStores';
 import { BACKGROUNDS } from '../shared/backgrounds';
-import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE, SAMPLE_ROUTE } from '../shared/fixtures';
+import { SAMPLE_BUNDLE, SAMPLE_ROUTE } from '../shared/fixtures';
 import { RouteBundle } from '../shared/types';
 import { createFakeProvider, AIProvider } from './ai/provider';
 
@@ -130,7 +131,7 @@ describe('GameSession.applyChoice — quoted ending condition', () => {
     const bundle = structuredClone(SAMPLE_BUNDLE);
     bundle.route.endings = [{ id: 'reach-keep', title: 'Reached the Keep', condition: "currentNodeId === 'n3'" }];
     const deps = {
-      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      backgrounds: BACKGROUNDS, content: createMemoryContentStores(),
       routes: createMemoryRouteStore([bundle]),
     };
     const s = createGameSession(createMemoryStore(), deps);
@@ -143,14 +144,13 @@ describe('GameSession.applyChoice — quoted ending condition', () => {
 
 describe('GameSession.applyChoice — defeat path', () => {
   it('losing the fight returns ending "defeat" and does not advance the node', async () => {
+    const content = createMemoryContentStores();
+    // Override goblin to be unkillable
+    const { ENEMY_DB } = await import('../shared/fixtures');
+    await content.enemies.update('goblin', { ...ENEMY_DB.goblin, stats: { ...ENEMY_DB.goblin.stats, str: 99 }, hp: 9999 });
     const deps = {
       backgrounds: BACKGROUNDS,
-      itemDb: ITEM_DB,
-      skillDb: SKILL_DB,
-      enemyDb: {
-        ...ENEMY_DB,
-        goblin: { ...ENEMY_DB.goblin, stats: { ...ENEMY_DB.goblin.stats, str: 99 }, hp: 9999 },
-      },
+      content,
       routes: createMemoryRouteStore([SAMPLE_BUNDLE]),
     };
     const s = createGameSession(createMemoryStore(), deps);
@@ -169,9 +169,7 @@ describe('GameSession.newGame — route selection', () => {
   function depsWith(...bundles: RouteBundle[]) {
     return {
       backgrounds: BACKGROUNDS,
-      itemDb: ITEM_DB,
-      skillDb: SKILL_DB,
-      enemyDb: ENEMY_DB,
+      content: createMemoryContentStores(),
       routes: createMemoryRouteStore(bundles),
     };
   }
@@ -235,9 +233,7 @@ describe('GameSession.continueToNextRoute', () => {
   function depsWith(...bundles: RouteBundle[]) {
     return {
       backgrounds: BACKGROUNDS,
-      itemDb: ITEM_DB,
-      skillDb: SKILL_DB,
-      enemyDb: ENEMY_DB,
+      content: createMemoryContentStores(),
       routes: createMemoryRouteStore(bundles),
       random: () => 0,
     };
@@ -282,7 +278,7 @@ describe('GameSession.applyChoice — hasNextRoute', () => {
     const second = structuredClone(SAMPLE_BUNDLE);
     second.route.id = 'route-2';
     const deps = {
-      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      backgrounds: BACKGROUNDS, content: createMemoryContentStores(),
       routes: createMemoryRouteStore([SAMPLE_BUNDLE, second]), random: () => 0,
     };
     const s = createGameSession(createMemoryStore(), deps);
@@ -307,7 +303,7 @@ describe('GameSession.applyChoice — hasNextRoute', () => {
     const second = structuredClone(SAMPLE_BUNDLE);
     second.route.id = 'route-2';
     const deps = {
-      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      backgrounds: BACKGROUNDS, content: createMemoryContentStores(),
       routes: createMemoryRouteStore([deadEnd, second]), random: () => 0,
     };
     const s = createGameSession(createMemoryStore(), deps);
@@ -336,7 +332,7 @@ function liveBundle(): RouteBundle {
 
 function liveSession(provider: AIProvider) {
   return createGameSession(createMemoryStore(), {
-    backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+    backgrounds: BACKGROUNDS, content: createMemoryContentStores(),
     routes: createMemoryRouteStore([liveBundle()]), provider,
   });
 }
@@ -366,7 +362,7 @@ describe('GameSession live event-gen', () => {
 
   it('serves stub text when no provider is configured', async () => {
     const s = createGameSession(createMemoryStore(), {
-      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      backgrounds: BACKGROUNDS, content: createMemoryContentStores(),
       routes: createMemoryRouteStore([liveBundle()]),
     });
     const res = await s.newGame('rogue', 'live-route');
@@ -389,7 +385,7 @@ describe('GameSession live event-gen', () => {
     };
     const overlay = { prose: 'enriched live prose', choiceTexts: ['enriched go'] };
     const s = createGameSession(createMemoryStore(), {
-      backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+      backgrounds: BACKGROUNDS, content: createMemoryContentStores(),
       routes: createMemoryRouteStore([advBundle]), provider: createFakeProvider([overlay]),
     });
     const { sessionId } = await s.newGame('rogue', 'adv-route'); // starts at pregen p1 → no provider call

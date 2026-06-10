@@ -2,7 +2,8 @@ import { createGameSession } from './session';
 import { createMemoryStore } from './store/memoryStore';
 import { serialize, deserialize } from '../shared/engine/save';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
-import { ITEM_DB, SKILL_DB, ENEMY_DB } from '../shared/fixtures';
+import { createMemoryContentStores } from './store/contentStores';
+import { ITEM_DB } from '../shared/fixtures';
 import { BACKGROUNDS } from '../shared/backgrounds';
 
 describe('server e2e (hardcoded route)', () => {
@@ -52,7 +53,7 @@ function shopRouteDeps() {
     route: { id: 'shop-rt', title: 'Shop', sourceNovelId: 'x', acts: [{ id: 'a', title: 'A', nodeIds: ['s1'] }], itemPool: [], enemyPool: [], endings: [], status: 'published' as const },
     nodes: { s1: { id: 's1', source: 'pregen' as const, prose: 'A merchant waits.', choices: [], merchant: { stock: [{ itemId: 'dagger', price: 10 }] } } },
   };
-  return { backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, routes: createMemoryRouteStore([bundle]), random: () => 0 };
+  return { backgrounds: BACKGROUNDS, content: createMemoryContentStores(), routes: createMemoryRouteStore([bundle]), random: () => 0 };
 }
 
 describe('shop', () => {

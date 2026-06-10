@@ -3,10 +3,11 @@ import { createApp } from './api';
 import { createGameSession } from './session';
 import { createMemoryStore } from './store/memoryStore';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
+import { createMemoryContentStores } from './store/contentStores';
 import { createFakeProvider, AIProvider } from './ai/provider';
 import { createAuth } from './auth';
 import { BACKGROUNDS } from '../shared/backgrounds';
-import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
+import { ITEM_DB, SKILL_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
 import { createMemoryNovelStore } from './rag/novelStore';
 import { createFakeEmbedder, EmbeddingProvider } from './rag/embeddingProvider';
 
@@ -19,7 +20,7 @@ function app(
   const routes = createMemoryRouteStore([structuredClone(SAMPLE_BUNDLE)]);
   const { novels, embeddings } = createMemoryNovelStore();
   const session = createGameSession(createMemoryStore(), {
-    backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB,
+    backgrounds: BACKGROUNDS, content: createMemoryContentStores(),
     routes, provider, embedder, embeddings,
   });
   return createApp(session, {

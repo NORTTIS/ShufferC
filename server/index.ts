@@ -4,6 +4,7 @@ import { createMemoryStore } from './store/memoryStore';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
 import { createPgRouteStore } from './store/pgRouteStore';
 import { createPgSaveStore } from './store/pgSaveStore';
+import { createMemoryContentStores } from './store/contentStores';
 import { createFakeProvider } from './ai/provider';
 import { createGeminiProvider } from './ai/gemini';
 import { createGeminiEmbedder } from './rag/embeddingProvider';
@@ -12,7 +13,7 @@ import { createPgNovelStore } from './rag/pgNovelStore';
 import { createDb } from './db/client';
 import { createAuth } from './auth';
 import { BACKGROUNDS } from '../shared/backgrounds';
-import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
+import { ITEM_DB, SKILL_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
 import { config } from './config';
 
 const db = config.databaseUrl ? createDb(config.databaseUrl) : null;
@@ -30,7 +31,7 @@ const provider = config.gemini.apiKey
 const embedder = createGeminiEmbedder(config.gemini); // available:false without a key → RAG endpoints report 503
 
 const session = createGameSession(saves, {
-  backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, routes,
+  backgrounds: BACKGROUNDS, content: createMemoryContentStores(), routes,
   provider, embedder, embeddings,
 });
 
