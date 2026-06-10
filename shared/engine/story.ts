@@ -50,7 +50,12 @@ export function resolveChoice(
     }
   }
 
-  next.choiceLog.push({ nodeId: node.id, choiceId });
+  next.choiceLog.push({
+    nodeId: node.id,
+    choiceId,
+    routeId: next.routeId,
+    ...(roll !== undefined ? { roll, checkPassed } : {}),
+  });
   if (choice.nextNodeId) next.currentNodeId = choice.nextNodeId;
 
   return { save: next, checkPassed, roll };

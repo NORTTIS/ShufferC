@@ -167,13 +167,23 @@ export interface CharacterState {
 
 export interface Reputation { hero: number; villain: number; factions: Record<string, number>; }
 
+/** Reward summary stored on a choiceLog entry / journal entry (subset of engine Rewards to avoid an import cycle). */
+export interface JournalReward { gold: number; xp: number; itemIds: string[] }
+
 export interface SaveState {
   version: number;
   routeId: string;
   character: CharacterState;
   reputation: Reputation;
   flags: Record<string, boolean>;
-  choiceLog: { nodeId: string; choiceId: string }[];
+  choiceLog: {
+    nodeId: string;
+    choiceId: string;
+    routeId?: string;        // route the entry belongs to (absent on pre-v4 saves)
+    roll?: number;           // d20 result when the choice had a skill check
+    checkPassed?: boolean;
+    reward?: JournalReward;  // combat spoils, patched on by the session layer
+  }[];
   currentNodeId: string;
   seed: number;
   gold: number;
