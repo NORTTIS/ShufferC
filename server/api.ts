@@ -10,13 +10,15 @@ import { NovelStore, EmbeddingStore } from './rag/novelStore';
 import { EmbeddingProvider } from './rag/embeddingProvider';
 import { ingestNovel } from './rag/ingest';
 import { retrieveContext } from './rag/retrieve';
+import { ContentStores } from './store/contentStores';
+import { registerContentRoutes } from './api/contentRoutes';
 
 type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
 
 export interface AdminDeps {
   provider: AIProvider;
   routes: RouteStore;
-  registries: Registries;
+  content: ContentStores;
   auth: Auth;
   novels: NovelStore;
   embeddings: EmbeddingStore;
@@ -141,10 +143,15 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
       );
     }
 
+    const registries: Registries = {
+      itemDb: await admin.content.items.all(),
+      skillDb: await admin.content.skills.all(),
+      enemyDb: await admin.content.enemies.all(),
+    };
     const result = await generateFramework(
       admin.provider,
       { contextText: ctx, title, nodeCount, sourceNovelId: novelId },
-      admin.registries,
+      registries,
     );
     if (!result.ok) {
       res.status(422).json({ errors: result.errors, attempts: result.attempts });
@@ -179,7 +186,7 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
       throw new GameError('stock must be an array or null', 400);
     }
     for (const entry of stock ?? []) {
-      if (!admin.registries.itemDb[entry?.itemId]) {
+      if (!(await admin.content.items.get(entry?.itemId))) {
         throw new GameError(`Unknown item ${entry?.itemId}`, 400);
       }
     }
@@ -205,6 +212,9 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
     res.status(204).end();
     return undefined;
   }));
+
+  // ── Admin content CRUD (attributes/effects/items/skills/enemies) ─────
+  registerContentRoutes(app, admin.content, requireAuth(admin.auth), wrap);
 
   // Centralised error handler — maps GameError.status, defaults to 500.
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

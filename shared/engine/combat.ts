@@ -1,6 +1,6 @@
-import { CombatActor, CombatEvent, CombatResult, Skill, StatKey } from '../types';
+import { CombatActor, CombatEvent, CombatResult, Skill, AttributeDef } from '../types';
 import { RNG, mulberry32, rollD20, faceToMultiplier } from './dice';
-import { applyEffect, tickEffects, hasControl } from './effects';
+import { applyEffect, tickEffects, hasControl, EffectMap } from './effects';
 
 const MAX_ROUNDS = 50;
 
@@ -8,6 +8,8 @@ export interface CombatInput {
   player: CombatActor;
   enemies: CombatActor[];
   seed: number;
+  attrs: AttributeDef[];
+  effects: EffectMap;
 }
 
 function pickSkill(actor: CombatActor): Skill | null {
@@ -18,17 +20,20 @@ function pickSkill(actor: CombatActor): Skill | null {
   return null;
 }
 
-function computeDamage(actor: CombatActor, skill: Skill, target: CombatActor, mult: number): number {
-  const stat: StatKey = skill.targetStat ?? 'str';
-  const base = actor.stats[stat] * (skill.power ?? 1);
-  const defense = Math.floor(target.stats.con / 2);
+function computeDamage(actor: CombatActor, skill: Skill, target: CombatActor, mult: number, attrs: AttributeDef[]): number {
+  const stat = skill.targetStat ?? 'str';
+  const base = (actor.stats[stat] ?? 0) * (skill.power ?? 1);
+  const defenseStat = attrs
+    .filter((a) => a.roles.includes('defense'))
+    .reduce((sum, a) => sum + (target.stats[a.id] ?? 0), 0);
+  const defense = Math.floor(defenseStat / 2);
   return Math.max(1, Math.round(base * mult) - defense);
 }
 
 export function runCombat(input: CombatInput): CombatResult {
   const rng: RNG = mulberry32(input.seed);
   const log: CombatEvent[] = [];
-  const { player, enemies } = input;
+  const { player, enemies, attrs, effects } = input;
   let round = 0;
 
   const alive = (a: CombatActor) => a.hp > 0;
@@ -43,10 +48,10 @@ export function runCombat(input: CombatInput): CombatResult {
 
       if (hasControl(actor)) {
         log.push({ round, actorId: actor.id, type: 'skip', note: 'controlled' });
-        tickEffects(actor); // tick (including duration countdown) even on skip
+        tickEffects(actor, effects); // tick (including duration countdown) even on skip
         continue;
       }
-      tickEffects(actor); // poison/regen + duration countdown at start of turn
+      tickEffects(actor, effects); // poison/regen + duration countdown at start of turn
       if (actor.hp <= 0) {
         log.push({ round, actorId: actor.id, type: 'death', note: 'died from effect' });
         continue;
@@ -68,10 +73,10 @@ export function runCombat(input: CombatInput): CombatResult {
 
       let damage = 0;
       if (effectTarget === 'enemy') {
-        damage = computeDamage(actor, skill, enemyTarget, mult);
+        damage = computeDamage(actor, skill, enemyTarget, mult, attrs);
         enemyTarget.hp = Math.max(0, enemyTarget.hp - damage);
       }
-      for (const eff of skill.effects ?? []) applyEffect(recipient, eff);
+      for (const eff of skill.effects ?? []) applyEffect(recipient, eff, effects);
 
       log.push({ round, actorId: actor.id, type: 'skill', skillId: skill.id, targetId: recipient.id, roll, multiplier: mult, damage });
 

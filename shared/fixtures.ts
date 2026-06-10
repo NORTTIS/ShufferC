@@ -1,4 +1,4 @@
-import { Item, Skill, Enemy, CharacterState, StoryNode, GameRoute, RouteBundle } from './types';
+import { Item, Skill, Enemy, CharacterState, StoryNode, GameRoute, RouteBundle, AttributeDef, EffectTemplate } from './types';
 
 export const SKILL_DB: Record<string, Skill> = {
   slash: { id: 'slash', name: 'Slash', targetStat: 'str', power: 1, effectTarget: 'enemy', sprite: 'skill.slash' },
@@ -65,3 +65,22 @@ export const SAMPLE_ROUTE: GameRoute = {
 };
 
 export const SAMPLE_BUNDLE: RouteBundle = { route: SAMPLE_ROUTE, nodes: SAMPLE_NODES };
+
+export const ATTRIBUTE_DB: Record<string, AttributeDef> = {
+  str: { id: 'str', name: 'Strength',     abbrev: 'STR', roles: ['core'], builtin: true },
+  dex: { id: 'dex', name: 'Dexterity',    abbrev: 'DEX', roles: ['core'], builtin: true },
+  int: { id: 'int', name: 'Intelligence', abbrev: 'INT', roles: ['core'], builtin: true },
+  wis: { id: 'wis', name: 'Wisdom',       abbrev: 'WIS', roles: ['core'], builtin: true },
+  cha: { id: 'cha', name: 'Charisma',     abbrev: 'CHA', roles: ['core'], builtin: true },
+  con: { id: 'con', name: 'Constitution', abbrev: 'CON', roles: ['core', 'defense', 'maxHp'], builtin: true },
+};
+
+export const EFFECT_DB: Record<string, EffectTemplate> = {
+  poison:       { id: 'poison',       name: 'Poison',       archetype: 'dot',     kind: 'dot',     magnitude: 1,  builtin: true },
+  regen:        { id: 'regen',        name: 'Regen',        archetype: 'hot',     kind: 'hot',     magnitude: 1,  builtin: true },
+  heal:         { id: 'heal',         name: 'Heal',         archetype: 'hot',     kind: 'hot',     instant: true, builtin: true },
+  attack_buff:  { id: 'attack_buff',  name: 'Attack Up',    archetype: 'statMod', kind: 'buff',    stat: 'str', magnitude: 1,  builtin: true },
+  defense_down: { id: 'defense_down', name: 'Defense Down', archetype: 'statMod', kind: 'debuff',  stat: 'con', magnitude: -1, builtin: true },
+  freeze:       { id: 'freeze',       name: 'Freeze',       archetype: 'control', kind: 'control', builtin: true },
+  stun:         { id: 'stun',         name: 'Stun',         archetype: 'control', kind: 'control', builtin: true },
+};

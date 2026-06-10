@@ -3,15 +3,15 @@ import { runCombat } from './combat';
 import { resolveChoice } from './story';
 import { serialize, deserialize } from './save';
 import { mulberry32 } from './dice';
-import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_CHARACTER, SAMPLE_NODES, SAMPLE_ROUTE } from '../fixtures';
+import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_CHARACTER, SAMPLE_NODES, SAMPLE_ROUTE, ATTRIBUTE_DB, EFFECT_DB } from '../fixtures';
 import { SaveState } from '../types';
 import { SAVE_VERSION } from '../constants';
 
 describe('engine integration (hardcoded route)', () => {
   it('runs a combat from fixtures and produces a winner + non-empty log', () => {
-    const player = buildPlayerActor(SAMPLE_CHARACTER, ITEM_DB, SKILL_DB);
+    const player = buildPlayerActor(SAMPLE_CHARACTER, ITEM_DB, SKILL_DB, EFFECT_DB, Object.values(ATTRIBUTE_DB));
     const goblin = buildEnemyActor(ENEMY_DB.goblin, SKILL_DB);
-    const result = runCombat({ player, enemies: [goblin], seed: 11 });
+    const result = runCombat({ player, enemies: [goblin], seed: 11, attrs: Object.values(ATTRIBUTE_DB), effects: EFFECT_DB });
     expect(['player', 'enemies', 'draw']).toContain(result.winner);
     expect(result.log.length).toBeGreaterThan(0);
   });

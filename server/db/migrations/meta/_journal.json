@@ -8,6 +8,13 @@
       "when": 1780932035592,
       "tag": "0000_sweet_post",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781077641497,
+      "tag": "0001_aromatic_mongoose",
+      "breakpoints": true
     }
   ]
 }

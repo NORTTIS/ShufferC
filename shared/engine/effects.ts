@@ -1,11 +1,13 @@
-import { CombatActor, StatusEffect } from '../types';
-import { EFFECT_REGISTRY } from '../effects/registry';
+import { CombatActor, EffectTemplate, StatusEffect } from '../types';
+import { applyArchetype, tickArchetype, expireArchetype } from '../effects/registry';
 
-export function applyEffect(target: CombatActor, effect: StatusEffect): void {
-  const behavior = EFFECT_REGISTRY[effect.id];
-  if (!behavior) return;
-  const copy: StatusEffect = { ...effect, kind: behavior.kind }; // normalize kind from registry
-  behavior.apply?.(target, copy);
+export type EffectMap = Record<string, EffectTemplate>;
+
+export function applyEffect(target: CombatActor, effect: StatusEffect, effects: EffectMap): void {
+  const tpl = effects[effect.id];
+  if (!tpl) return;
+  const copy: StatusEffect = { ...effect, kind: tpl.kind }; // normalize kind from the template
+  applyArchetype(target, copy, tpl);
   if (copy.duration > 0) target.statuses.push(copy);
 }
 
@@ -13,14 +15,14 @@ export function hasControl(actor: CombatActor): boolean {
   return actor.statuses.some((s) => s.kind === 'control' && s.duration > 0);
 }
 
-export function tickEffects(actor: CombatActor): void {
+export function tickEffects(actor: CombatActor, effects: EffectMap): void {
   const remaining: StatusEffect[] = [];
   for (const s of actor.statuses) {
-    const behavior = EFFECT_REGISTRY[s.id];
-    behavior?.tick?.(actor, s);
+    const tpl = effects[s.id];
+    if (tpl) tickArchetype(actor, s, tpl);
     s.duration -= 1;
     if (s.duration <= 0) {
-      behavior?.onExpire?.(actor, s);
+      if (tpl) expireArchetype(actor, s, tpl);
     } else {
       remaining.push(s);
     }

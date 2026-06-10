@@ -5,7 +5,7 @@ import {
 import { applyRepDelta } from '../shared/engine/reputation';
 import { SAVE_VERSION, EQUIP_SLOTS } from '../shared/constants';
 import { Background, BACKGROUNDS } from '../shared/backgrounds';
-import { SKILL_DB, ITEM_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
+import { SAMPLE_BUNDLE } from '../shared/fixtures';
 import { effectiveStats, buildPlayerActor, buildEnemyActor, deriveMaxHp } from '../shared/engine/character';
 import { rollRewards, Rewards } from '../shared/engine/rewards';
 import { runCombat } from '../shared/engine/combat';
@@ -15,6 +15,7 @@ import { parseEndingCondition } from '../shared/endings';
 import { SaveStore } from './store/SaveStore';
 import { RouteStore } from './store/RouteStore';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
+import { ContentStores, createMemoryContentStores } from './store/contentStores';
 import { AIProvider } from './ai/provider';
 import { EmbeddingProvider } from './rag/embeddingProvider';
 import { EmbeddingStore } from './rag/novelStore';
@@ -39,9 +40,7 @@ function resolvePrice(entry: { price?: number }, item: { cost?: number }): numbe
 
 export interface SessionDeps {
   backgrounds: Record<string, Background>;
-  itemDb: Record<string, Item>;
-  skillDb: Record<string, Skill>;
-  enemyDb: Record<string, Enemy>;
+  content: ContentStores;
   routes: RouteStore;
   random?: () => number;
   provider?: AIProvider;          // absent / unavailable → live nodes serve stub text
@@ -51,9 +50,7 @@ export interface SessionDeps {
 
 const DEFAULT_DEPS: SessionDeps = {
   backgrounds: BACKGROUNDS,
-  itemDb: ITEM_DB,
-  skillDb: SKILL_DB,
-  enemyDb: ENEMY_DB,
+  content: createMemoryContentStores(),
   routes: createMemoryRouteStore([SAMPLE_BUNDLE]),
   random: Math.random,
 };
@@ -90,6 +87,17 @@ export interface GameSession {
 }
 
 export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_DEPS): GameSession {
+  async function loadRegistries() {
+    const [itemDb, skillDb, enemyDb, attrMap, effects] = await Promise.all([
+      deps.content.items.all(),
+      deps.content.skills.all(),
+      deps.content.enemies.all(),
+      deps.content.attributes.all(),
+      deps.content.effects.all(),
+    ]);
+    return { itemDb, skillDb, enemyDb, attrs: Object.values(attrMap), effects };
+  }
+
   // Slice simplification (spec §4.3): endings are matched by a simple
   // `currentNodeId === <id>` condition string. Richer ending conditions are
   // sub-project E. A non-matching/different condition format yields no ending.
@@ -138,14 +146,14 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
     };
   }
 
-  function view(save: SaveState, bundle: RouteBundle): SessionView {
+  function view(save: SaveState, bundle: RouteBundle, itemDb: Record<string, Item>): SessionView {
     const raw = bundle.nodes[save.currentNodeId];
     if (!raw) throw new GameError(`Node ${save.currentNodeId} not found`, 500);
     const node = materializeNode(raw, save.liveNodes?.[save.currentNodeId]);
     return {
       save,
       node,
-      effectiveStats: effectiveStats(save.character, deps.itemDb),
+      effectiveStats: effectiveStats(save.character, itemDb),
       ending: computeEnding(save, bundle.route),
     };
   }
@@ -209,6 +217,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
     },
 
     async newGame(backgroundId: string, routeId?: string) {
+      const reg = await loadRegistries();
       const bg = deps.backgrounds[backgroundId];
       if (!bg) throw new GameError(`Unknown background ${backgroundId}`, 400);
 
@@ -231,7 +240,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         equipped: { ...bg.equipped },
         skillPriority: [...bg.skillPriority],
       };
-      const startHp = deriveMaxHp(effectiveStats(character, deps.itemDb));
+      const startHp = deriveMaxHp(effectiveStats(character, reg.itemDb), reg.attrs);
       const save: SaveState = {
         version: SAVE_VERSION,
         routeId: bundle.route.id,
@@ -250,17 +259,19 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       };
       const sessionId = await store.create(save);
       await enrich(sessionId, save, bundle);
-      return { sessionId, ...view(save, bundle) };
+      return { sessionId, ...view(save, bundle, reg.itemDb) };
     },
 
     async getView(id: string) {
+      const reg = await loadRegistries();
       const save = await load(id);
       const bundle = await loadBundle(save.routeId);
       await enrich(id, save, bundle);
-      return withNextRoute(view(save, bundle));
+      return withNextRoute(view(save, bundle, reg.itemDb));
     },
 
     async continueToNextRoute(id: string): Promise<SessionView> {
+      const reg = await loadRegistries();
       const save = await load(id);
       const played = save.playedRouteIds ?? [save.routeId];
       const nextId = await pickRoute(played);
@@ -271,13 +282,14 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       save.currentNodeId = bundle.route.acts[0].nodeIds[0];
       save.playedRouteIds = [...played, nextId];
       // character, reputation, flags, choiceLog, seed are intentionally preserved
-      save.vitals = { currentHp: deriveMaxHp(effectiveStats(save.character, deps.itemDb)), pendingBuffs: save.vitals.pendingBuffs };
+      save.vitals = { currentHp: deriveMaxHp(effectiveStats(save.character, reg.itemDb), reg.attrs), pendingBuffs: save.vitals.pendingBuffs };
       await store.put(id, save);
       await enrich(id, save, bundle);
-      return view(save, bundle);
+      return view(save, bundle, reg.itemDb);
     },
 
     async applyChoice(id, choiceId, skillPriority) {
+      const reg = await loadRegistries();
       const save = await load(id);
       const bundle = await loadBundle(save.routeId);
       const node = bundle.nodes[save.currentNodeId];
@@ -290,7 +302,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         const res = resolveChoice(save, node, choiceId, mulberry32(save.seed));
         await store.put(id, res.save);
         await enrich(id, res.save, bundle);
-        return withNextRoute({ ...view(res.save, bundle), checkPassed: res.checkPassed, roll: res.roll });
+        return withNextRoute({ ...view(res.save, bundle, reg.itemDb), checkPassed: res.checkPassed, roll: res.roll });
       }
 
       // Path 2: combat choice ("fight") — node has combat and choice has no skill check
@@ -300,17 +312,19 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         }
         const player = buildPlayerActor(
           { ...save.character, skillPriority },
-          deps.itemDb,
-          deps.skillDb,
+          reg.itemDb,
+          reg.skillDb,
+          reg.effects,
+          reg.attrs,
           { startHp: save.vitals.currentHp, extraBuffs: save.vitals.pendingBuffs },
         );
         const enemyDefs = node.combat.enemyIds.map((eid) => {
-          const enemy = deps.enemyDb[eid];
+          const enemy = reg.enemyDb[eid];
           if (!enemy) throw new GameError(`Enemy ${eid} not found`, 500);
           return enemy;
         });
-        const enemies = enemyDefs.map((e) => buildEnemyActor(e, deps.skillDb));
-        const combat = runCombat({ player, enemies, seed: save.seed });
+        const enemies = enemyDefs.map((e) => buildEnemyActor(e, reg.skillDb));
+        const combat = runCombat({ player, enemies, seed: save.seed, attrs: reg.attrs, effects: reg.effects });
 
         if (combat.winner === 'player') {
           const res = resolveChoice(save, node, choiceId);
@@ -320,7 +334,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
           res.save.gold += reward.gold;
           res.save.xp += reward.xp;
           for (const itemId of reward.itemIds) {
-            const item = deps.itemDb[itemId];
+            const item = reg.itemDb[itemId];
             if (item?.kind === 'consumable') {
               res.save.consumables[itemId] = (res.save.consumables[itemId] ?? 0) + 1;
             } else {
@@ -332,19 +346,20 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
 
           await store.put(id, res.save);
           await enrich(id, res.save, bundle);
-          return withNextRoute({ ...view(res.save, bundle), combat, reward });
+          return withNextRoute({ ...view(res.save, bundle, reg.itemDb), combat, reward });
         }
-        return { ...view(save, bundle), combat, ending: 'defeat' };
+        return { ...view(save, bundle, reg.itemDb), combat, ending: 'defeat' };
       }
 
       // Path 3: plain advance (no check, no combat)
       const res = resolveChoice(save, node, choiceId);
       await store.put(id, res.save);
       await enrich(id, res.save, bundle);
-      return withNextRoute(view(res.save, bundle));
+      return withNextRoute(view(res.save, bundle, reg.itemDb));
     },
 
     async equip(id, slot, itemId) {
+      const reg = await loadRegistries();
       const save = await load(id);
       if (!EQUIP_SLOTS.includes(slot as EquipSlot)) {
         throw new GameError(`Invalid slot ${slot}`, 400);
@@ -355,24 +370,25 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         if (!save.character.inventory.includes(itemId)) {
           throw new GameError(`Item ${itemId} not in inventory`, 400);
         }
-        const item = deps.itemDb[itemId];
+        const item = reg.itemDb[itemId];
         if (!item) throw new GameError(`Item ${itemId} not found`, 400);
         if (item.slot !== slot) {
           throw new GameError(`Item ${itemId} cannot occupy slot ${slot}`, 400);
         }
         save.character.equipped[slot as EquipSlot] = itemId;
       }
-      const maxHp = deriveMaxHp(effectiveStats(save.character, deps.itemDb));
+      const maxHp = deriveMaxHp(effectiveStats(save.character, reg.itemDb), reg.attrs);
       if (save.vitals.currentHp > maxHp) save.vitals.currentHp = maxHp;
       await store.put(id, save);
       const stored = structuredClone(save);
-      return { save: stored, effectiveStats: effectiveStats(stored.character, deps.itemDb) };
+      return { save: stored, effectiveStats: effectiveStats(stored.character, reg.itemDb) };
     },
 
     async getShop(id) {
+      const reg = await loadRegistries();
       const { node } = await loadMerchantNode(id);
       const stock = node.merchant!.stock.map((s) => {
-        const item = deps.itemDb[s.itemId];
+        const item = reg.itemDb[s.itemId];
         if (!item) throw new GameError(`Item ${s.itemId} not found`, 500); // stock comes from admin/seed config; a gap is bad data, not user error
         return { item, price: resolvePrice(s, item) };
       });
@@ -380,10 +396,11 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
     },
 
     async buy(id, itemId) {
+      const reg = await loadRegistries();
       const { save, node } = await loadMerchantNode(id);
       const entry = node.merchant!.stock.find((s) => s.itemId === itemId);
       if (!entry) throw new GameError(`Item ${itemId} not sold here`, 400);
-      const item = deps.itemDb[itemId];
+      const item = reg.itemDb[itemId];
       if (!item) throw new GameError(`Item ${itemId} not found`, 500); // see getShop: missing stock item = bad config
       const price = resolvePrice(entry, item);
       if (save.gold < price) throw new GameError('Not enough gold', 400);
@@ -392,17 +409,18 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       else save.character.inventory.push(itemId);
       await store.put(id, save);
       const stored = structuredClone(save);
-      return { save: stored, effectiveStats: effectiveStats(stored.character, deps.itemDb) };
+      return { save: stored, effectiveStats: effectiveStats(stored.character, reg.itemDb) };
     },
 
     async useItem(id, itemId) {
+      const reg = await loadRegistries();
       const save = await load(id);
       if ((save.consumables[itemId] ?? 0) <= 0) throw new GameError(`Item ${itemId} not owned`, 400);
-      const item = deps.itemDb[itemId];
+      const item = reg.itemDb[itemId];
       if (!item) throw new GameError(`Item ${itemId} not found`, 500); // owned id missing from itemDb = bad data, not user error
       if (item.kind !== 'consumable') throw new GameError(`Item ${itemId} is not consumable`, 400);
 
-      const maxHp = deriveMaxHp(effectiveStats(save.character, deps.itemDb));
+      const maxHp = deriveMaxHp(effectiveStats(save.character, reg.itemDb), reg.attrs);
       for (const eff of item.onUse ?? []) {
         if (eff.duration === 0) {
           // instant effects: only heal-over-time restores HP out of combat; other instant kinds are intentionally ignored here
@@ -418,7 +436,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
 
       await store.put(id, save);
       const stored = structuredClone(save);
-      return { save: stored, effectiveStats: effectiveStats(stored.character, deps.itemDb) };
+      return { save: stored, effectiveStats: effectiveStats(stored.character, reg.itemDb) };
     },
   };
 }

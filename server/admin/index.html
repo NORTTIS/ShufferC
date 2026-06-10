@@ -5,98 +5,220 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ShufferC Admin</title>
   <style>
-    :root { --bg:#0f1117; --card:#1a1d27; --fg:#e6e8ee; --muted:#8a90a2; --accent:#5b8cff; --ok:#3fb950; --warn:#d29922; --err:#f85149; }
+    :root { --bg:#0f1117; --card:#1a1d27; --fg:#e6e8ee; --muted:#8a90a2; --accent:#5b8cff; --ok:#3fb950; --warn:#d29922; --err:#f85149; --line:#2a2e3a; }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); }
-    header { padding:16px 24px; border-bottom:1px solid #2a2e3a; display:flex; justify-content:space-between; align-items:center; }
+    html, body { height:100%; }
+    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); display:flex; flex-direction:column; }
+    header { padding:14px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:16px; flex:0 0 auto; }
     h1 { font-size:18px; margin:0; }
-    main { max-width:880px; margin:0 auto; padding:24px; }
-    .card { background:var(--card); border:1px solid #2a2e3a; border-radius:10px; padding:18px; margin-bottom:18px; }
+    .headline { display:flex; align-items:center; gap:14px; }
+    .pill { font-size:12px; padding:3px 9px; border:1px solid var(--line); border-radius:999px; color:var(--muted); }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:18px; }
     label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
-    input, textarea, select { width:100%; padding:9px 11px; background:#0c0e14; color:var(--fg); border:1px solid #2a2e3a; border-radius:6px; font:inherit; }
+    input, textarea, select { width:100%; padding:9px 11px; background:#0c0e14; color:var(--fg); border:1px solid var(--line); border-radius:6px; font:inherit; }
     textarea { min-height:140px; resize:vertical; }
     button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px 16px; font:inherit; cursor:pointer; }
     button.secondary { background:#2a2e3a; }
     button:disabled { opacity:.5; cursor:default; }
     table { width:100%; border-collapse:collapse; margin-top:8px; }
-    th, td { text-align:left; padding:8px 6px; border-bottom:1px solid #2a2e3a; font-size:14px; }
+    th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); font-size:14px; }
     .status { font-size:13px; }
     .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); }
-    pre { background:#0c0e14; padding:12px; border-radius:6px; overflow:auto; max-height:320px; font-size:12px; }
+    pre { background:#0c0e14; padding:12px; border-radius:6px; overflow:auto; font-size:12px; margin:0; }
     .hidden { display:none; }
     .row { display:flex; gap:12px; }
     .row > div { flex:1; }
     .msg { margin-top:10px; font-size:13px; }
+
+    /* Login centered */
+    #login { max-width:420px; margin:48px auto; }
+
+    /* App shell: sidebar + content */
+    .layout { flex:1 1 auto; display:flex; min-height:0; }
+    .sidebar { flex:0 0 200px; border-right:1px solid var(--line); padding:18px 12px; display:flex; flex-direction:column; gap:6px; }
+    .navbtn { display:block; width:100%; text-align:left; background:transparent; color:var(--muted); padding:10px 12px; border-radius:8px; font:inherit; }
+    .navbtn:hover { background:#161922; color:var(--fg); }
+    .navbtn.active { background:#222637; color:var(--fg); }
+    .content { flex:1 1 auto; min-width:0; overflow:auto; padding:24px; }
+    .content-inner { max-width:880px; margin:0 auto; }
+
+    /* Route detail split screen */
+    .detail-head { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+    .detail-head h2 { margin:0; font-size:16px; }
+    .split { display:flex; gap:16px; align-items:flex-start; }
+    .split > .pane { flex:1 1 50%; min-width:0; }
+    .pane h3 { margin:0 0 8px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .pane pre { max-height:70vh; }
+    .nodes-scroll { max-height:70vh; overflow:auto; padding-right:4px; }
+    @media (max-width: 760px) { .split { flex-direction:column; } .split > .pane { flex-basis:auto; width:100%; } }
   </style>
 </head>
 <body>
   <header>
-    <h1>ShufferC Admin</h1>
+    <div class="headline">
+      <h1>ShufferC Admin</h1>
+      <span id="statusPill" class="pill hidden">checking…</span>
+    </div>
     <button id="logout" class="secondary hidden">Log out</button>
   </header>
-  <main>
-    <!-- Login -->
-    <section id="login" class="card">
-      <h2 style="margin-top:0;font-size:15px;">Log in</h2>
-      <label>Email</label>
-      <input id="email" type="email" autocomplete="username" />
-      <label>Password</label>
-      <input id="password" type="password" autocomplete="current-password" />
-      <div style="margin-top:14px;"><button id="loginBtn">Log in</button></div>
-      <div id="loginMsg" class="msg err"></div>
-    </section>
 
-    <!-- Console -->
-    <div id="console" class="hidden">
-      <section class="card">
-        <div id="status" class="status">Checking provider…</div>
-      </section>
+  <!-- Login -->
+  <section id="login" class="card">
+    <h2 style="margin-top:0;font-size:15px;">Log in</h2>
+    <label>Email</label>
+    <input id="email" type="email" autocomplete="username" />
+    <label>Password</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <div style="margin-top:14px;"><button id="loginBtn">Log in</button></div>
+    <div id="loginMsg" class="msg err"></div>
+  </section>
 
-      <section class="card">
-        <h2 style="margin-top:0;font-size:15px;">Novels (RAG source)</h2>
-        <label>Title</label>
-        <input id="novelTitle" placeholder="Moby Dick" />
-        <label>Full text</label>
-        <textarea id="novelText" placeholder="Paste the novel / source text. It is chunked and embedded into pgvector."></textarea>
-        <div style="margin-top:14px;"><button id="novelBtn">Upload &amp; embed</button></div>
-        <div id="novelMsg" class="msg"></div>
-        <table>
-          <thead><tr><th>ID</th><th>Title</th><th>Chunks</th><th>Status</th><th></th></tr></thead>
-          <tbody id="novelsBody"></tbody>
-        </table>
-      </section>
+  <!-- App shell -->
+  <div id="console" class="layout hidden">
+    <aside class="sidebar">
+      <button class="navbtn active" data-view="routes">Routes</button>
+      <button class="navbtn" data-view="novels">Novels</button>
+      <button class="navbtn" data-view="status">Status</button>
+      <button class="navbtn" data-view="attributes">Attributes</button>
+      <button class="navbtn" data-view="effects">Effects</button>
+      <button class="navbtn" data-view="items">Items</button>
+      <button class="navbtn" data-view="skills">Skills</button>
+      <button class="navbtn" data-view="enemies">Enemies</button>
+    </aside>
 
-      <section class="card">
-        <h2 style="margin-top:0;font-size:15px;">Generate a route</h2>
-        <div class="row">
-          <div><label>Title</label><input id="title" placeholder="The Bridge" /></div>
-          <div><label>Node count</label><input id="nodeCount" type="number" value="4" min="3" max="8" /></div>
+    <div class="content">
+      <div class="content-inner">
+
+        <!-- ===== Routes view ===== -->
+        <div id="view-routes" class="view">
+          <!-- list sub-screen -->
+          <div id="routes-list">
+            <section class="card">
+              <h2 style="margin-top:0;font-size:15px;">Generate a route</h2>
+              <div class="row">
+                <div><label>Title</label><input id="title" placeholder="The Bridge" /></div>
+                <div><label>Node count</label><input id="nodeCount" type="number" value="4" min="3" max="8" /></div>
+              </div>
+              <label>Ground in a novel (optional — RAG)</label>
+              <select id="novelSelect">
+                <option value="">— none: use raw source text below —</option>
+              </select>
+              <label>Retrieval query (optional; defaults to the title)</label>
+              <input id="ragQuery" placeholder="e.g. the hero's first battle" />
+              <label>Source text (used only when no novel is selected)</label>
+              <textarea id="contextText" placeholder="Paste a few paragraphs of source material…"></textarea>
+              <div style="margin-top:14px;"><button id="genBtn">Generate</button></div>
+              <div id="genMsg" class="msg"></div>
+              <pre id="genOut" class="hidden"></pre>
+            </section>
+
+            <section class="card">
+              <h2 style="margin-top:0;font-size:15px;">Routes</h2>
+              <table>
+                <thead><tr><th>ID</th><th>Title</th><th>Status</th><th></th></tr></thead>
+                <tbody id="routesBody"></tbody>
+              </table>
+            </section>
+          </div>
+
+          <!-- detail sub-screen (View JSON) -->
+          <div id="routes-detail" class="hidden">
+            <div class="detail-head">
+              <button id="detailBack" class="secondary">← Back</button>
+              <h2 id="detailTitle">Route</h2>
+            </div>
+            <div class="split">
+              <div class="pane">
+                <h3>JSON</h3>
+                <pre id="viewOut"></pre>
+              </div>
+              <div class="pane">
+                <h3>Nodes — source &amp; merchant stock</h3>
+                <div id="nodeMsg" class="msg"></div>
+                <div id="nodesOut" class="nodes-scroll"></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <label>Ground in a novel (optional — RAG)</label>
-        <select id="novelSelect">
-          <option value="">— none: use raw source text below —</option>
-        </select>
-        <label>Retrieval query (optional; defaults to the title)</label>
-        <input id="ragQuery" placeholder="e.g. the hero's first battle" />
-        <label>Source text (used only when no novel is selected)</label>
-        <textarea id="contextText" placeholder="Paste a few paragraphs of source material…"></textarea>
-        <div style="margin-top:14px;"><button id="genBtn">Generate</button></div>
-        <div id="genMsg" class="msg"></div>
-        <pre id="genOut" class="hidden"></pre>
-      </section>
 
-      <section class="card">
-        <h2 style="margin-top:0;font-size:15px;">Routes</h2>
-        <table>
-          <thead><tr><th>ID</th><th>Title</th><th>Status</th><th></th></tr></thead>
-          <tbody id="routesBody"></tbody>
-        </table>
-        <pre id="viewOut" class="hidden"></pre>
-        <div id="nodeMsg" class="msg"></div>
-        <div id="nodesOut" class="hidden"></div>
-      </section>
+        <!-- ===== Novels view ===== -->
+        <div id="view-novels" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Novels (RAG source)</h2>
+            <label>Title</label>
+            <input id="novelTitle" placeholder="Moby Dick" />
+            <label>Full text</label>
+            <textarea id="novelText" placeholder="Paste the novel / source text. It is chunked and embedded into pgvector."></textarea>
+            <div style="margin-top:14px;"><button id="novelBtn">Upload &amp; embed</button></div>
+            <div id="novelMsg" class="msg"></div>
+            <table>
+              <thead><tr><th>ID</th><th>Title</th><th>Chunks</th><th>Status</th><th></th></tr></thead>
+              <tbody id="novelsBody"></tbody>
+            </table>
+          </section>
+        </div>
+
+        <!-- ===== Status view ===== -->
+        <div id="view-status" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Provider status</h2>
+            <div id="status" class="status">Checking provider…</div>
+          </section>
+        </div>
+
+        <!-- ===== Attributes view ===== -->
+        <div id="view-attributes" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Attributes</h2>
+            <div id="attributes-form"></div>
+            <div id="attributes-msg" class="msg"></div>
+            <table><thead><tr id="attributes-head"></tr></thead><tbody id="attributes-body"></tbody></table>
+          </section>
+        </div>
+
+        <!-- ===== Effects view ===== -->
+        <div id="view-effects" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Effects</h2>
+            <div id="effects-form"></div>
+            <div id="effects-msg" class="msg"></div>
+            <table><thead><tr id="effects-head"></tr></thead><tbody id="effects-body"></tbody></table>
+          </section>
+        </div>
+
+        <!-- ===== Items view ===== -->
+        <div id="view-items" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Items</h2>
+            <div id="items-form"></div>
+            <div id="items-msg" class="msg"></div>
+            <table><thead><tr id="items-head"></tr></thead><tbody id="items-body"></tbody></table>
+          </section>
+        </div>
+
+        <!-- ===== Skills view ===== -->
+        <div id="view-skills" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Skills</h2>
+            <div id="skills-form"></div>
+            <div id="skills-msg" class="msg"></div>
+            <table><thead><tr id="skills-head"></tr></thead><tbody id="skills-body"></tbody></table>
+          </section>
+        </div>
+
+        <!-- ===== Enemies view ===== -->
+        <div id="view-enemies" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Enemies</h2>
+            <div id="enemies-form"></div>
+            <div id="enemies-msg" class="msg"></div>
+            <table><thead><tr id="enemies-head"></tr></thead><tbody id="enemies-body"></tbody></table>
+          </section>
+        </div>
+
+      </div>
     </div>
-  </main>
+  </div>
 
   <script>
     const TOKEN_KEY = 'shufferc_admin_token';
@@ -104,6 +226,248 @@
     let token = localStorage.getItem(TOKEN_KEY) || '';
 
     function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }; }
+
+    // ---- Registry cache + field specs ----
+    const REG = { attributes: [], effects: [], items: [], skills: [], enemies: [] };
+    async function loadReg() {
+      const [attributes, effects, items, skills, enemies] = await Promise.all(
+        ['attributes','effects','items','skills','enemies'].map((r) => api('/admin/' + r, { headers: authHeaders() }))
+      );
+      Object.assign(REG, { attributes, effects, items, skills, enemies });
+    }
+
+    // Field types: text, slug, number, select(options), checkbox,
+    //   statgrid (one number per attribute), effectrefs (repeatable effect picker), skillrefs (multi), drops (item+chance rows)
+    const SPECS = {
+      attributes: {
+        columns: ['id','name','abbrev','roles','builtin'],
+        fields: [
+          { key:'id', type:'slug', label:'ID' },
+          { key:'name', type:'text', label:'Name' },
+          { key:'abbrev', type:'text', label:'Abbrev' },
+          { key:'roles', type:'multiselect', label:'Roles', options:['core','defense','maxHp'] },
+          { key:'defaultBase', type:'number', label:'Default base (optional)' },
+        ],
+      },
+      effects: {
+        columns: ['id','name','archetype','kind','stat','magnitude','duration','builtin'],
+        fields: [
+          { key:'id', type:'slug', label:'ID' },
+          { key:'name', type:'text', label:'Name' },
+          { key:'archetype', type:'select', label:'Archetype', options:['dot','hot','statMod','control'] },
+          { key:'kind', type:'select', label:'Kind', options:['buff','debuff','dot','hot','control'] },
+          { key:'stat', type:'select', label:'Stat (statMod only)', optionsFrom:'attributes', optional:true },
+          { key:'magnitude', type:'number', label:'Magnitude' },
+          { key:'duration', type:'number', label:'Duration' },
+          { key:'instant', type:'checkbox', label:'Instant (duration 0)' },
+          { key:'sprite', type:'text', label:'Sprite (optional)' },
+        ],
+      },
+      items: {
+        columns: ['id','name','slot','kind','cost'],
+        fields: [
+          { key:'id', type:'slug', label:'ID' },
+          { key:'name', type:'text', label:'Name' },
+          { key:'slot', type:'select', label:'Slot', options:['weapon','armor','ring','scroll','quest'] },
+          { key:'kind', type:'select', label:'Kind', options:['gear','consumable'] },
+          { key:'cost', type:'number', label:'Cost' },
+          { key:'statMods', type:'statgrid', label:'Stat mods' },
+          { key:'onEquip', type:'effectrefs', label:'On equip' },
+          { key:'onUse', type:'effectrefs', label:'On use' },
+          { key:'grantsSkills', type:'skillrefs', label:'Grants skills' },
+          { key:'storyTags', type:'csv', label:'Story tags (comma-separated)' },
+          { key:'sprite', type:'text', label:'Sprite (optional)' },
+        ],
+      },
+      skills: {
+        columns: ['id','name','targetStat','power'],
+        fields: [
+          { key:'id', type:'slug', label:'ID' },
+          { key:'name', type:'text', label:'Name' },
+          { key:'targetStat', type:'select', label:'Target stat', optionsFrom:'attributes', optional:true },
+          { key:'effectTarget', type:'select', label:'Effect target', options:['enemy','self'], optional:true },
+          { key:'power', type:'number', label:'Power' },
+          { key:'effects', type:'effectrefs', label:'Effects' },
+          { key:'sprite', type:'text', label:'Sprite (optional)' },
+        ],
+      },
+      enemies: {
+        columns: ['id','name','hp'],
+        fields: [
+          { key:'id', type:'slug', label:'ID' },
+          { key:'name', type:'text', label:'Name' },
+          { key:'hp', type:'number', label:'HP' },
+          { key:'stats', type:'statgrid', label:'Stats' },
+          { key:'skillPriority', type:'skillrefs', label:'Skill priority' },
+          { key:'reward', type:'reward', label:'Reward' },
+        ],
+      },
+    };
+
+    function fieldInput(f, value) {
+      const wrap = document.createElement('div');
+      const lab = document.createElement('label'); lab.textContent = f.label; wrap.appendChild(lab);
+      let el;
+      if (f.type === 'select') {
+        el = document.createElement('select');
+        const opts = f.optionsFrom ? REG[f.optionsFrom].map((x) => x.id) : f.options;
+        if (f.optional) el.appendChild(new Option('—', ''));
+        for (const o of opts) el.appendChild(new Option(o, o));
+        if (value != null) el.value = value;
+      } else if (f.type === 'multiselect') {
+        el = document.createElement('div');
+        for (const o of f.options) {
+          const id = f.key + '_' + o;
+          const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = o; cb.id = id;
+          cb.checked = Array.isArray(value) && value.includes(o);
+          const l = document.createElement('label'); l.style.display = 'inline'; l.htmlFor = id; l.textContent = ' ' + o + '  ';
+          el.appendChild(cb); el.appendChild(l);
+        }
+      } else if (f.type === 'checkbox') {
+        el = document.createElement('input'); el.type = 'checkbox'; el.checked = !!value;
+      } else if (f.type === 'statgrid') {
+        el = document.createElement('div'); el.className = 'row'; el.style.flexWrap = 'wrap';
+        for (const a of REG.attributes) {
+          const d = document.createElement('div');
+          const l = document.createElement('label'); l.textContent = a.abbrev;
+          const n = document.createElement('input'); n.type = 'number'; n.dataset.stat = a.id;
+          n.value = (value && value[a.id] != null) ? value[a.id] : '';
+          d.appendChild(l); d.appendChild(n); el.appendChild(d);
+        }
+      } else if (f.type === 'effectrefs') {
+        el = document.createElement('div');
+        const addRow = (ref) => {
+          const r = document.createElement('div'); r.className = 'row effectref';
+          const sel = document.createElement('select');
+          for (const e of REG.effects) sel.appendChild(new Option(e.id, e.id));
+          if (ref) sel.value = ref.id;
+          const dur = document.createElement('input'); dur.type = 'number'; dur.placeholder = 'duration'; dur.className = 'dur'; dur.value = ref ? (ref.duration ?? '') : '';
+          const mag = document.createElement('input'); mag.type = 'number'; mag.placeholder = 'magnitude'; mag.className = 'mag'; mag.value = ref ? (ref.magnitude ?? '') : '';
+          const rm = document.createElement('button'); rm.className = 'secondary'; rm.textContent = '✕'; rm.onclick = () => r.remove();
+          r.append(sel, dur, mag, rm); el.appendChild(r);
+        };
+        (value || []).forEach(addRow);
+        const add = document.createElement('button'); add.className = 'secondary'; add.textContent = '+ effect'; add.onclick = () => addRow();
+        el.appendChild(add);
+      } else if (f.type === 'skillrefs') {
+        el = document.createElement('div');
+        for (const s of REG.skills) {
+          const id = f.key + '_' + s.id;
+          const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = s.id; cb.id = id;
+          cb.checked = Array.isArray(value) && value.includes(s.id);
+          const l = document.createElement('label'); l.style.display = 'inline'; l.htmlFor = id; l.textContent = ' ' + s.id + '  ';
+          el.append(cb, l);
+        }
+      } else if (f.type === 'reward') {
+        el = document.createElement('div');
+        el.innerHTML = '<input class="r-goldMin" type="number" placeholder="gold min"> <input class="r-goldMax" type="number" placeholder="gold max"> <input class="r-xp" type="number" placeholder="xp">';
+        const r = value || {};
+        if (r.gold) { el.querySelector('.r-goldMin').value = r.gold[0]; el.querySelector('.r-goldMax').value = r.gold[1]; }
+        if (r.xp != null) el.querySelector('.r-xp').value = r.xp;
+        // drops: itemId:chance rows
+        const drops = document.createElement('div');
+        const addDrop = (d) => {
+          const row = document.createElement('div'); row.className = 'row drop';
+          const sel = document.createElement('select'); for (const it of REG.items) sel.appendChild(new Option(it.id, it.id)); if (d) sel.value = d.itemId;
+          const ch = document.createElement('input'); ch.type = 'number'; ch.step = '0.1'; ch.className = 'chance'; ch.placeholder = 'chance 0–1'; ch.value = d ? d.chance : '';
+          const rm = document.createElement('button'); rm.className = 'secondary'; rm.textContent = '✕'; rm.onclick = () => row.remove();
+          row.append(sel, ch, rm); drops.appendChild(row);
+        };
+        (r.drops || []).forEach(addDrop);
+        const add = document.createElement('button'); add.className = 'secondary'; add.textContent = '+ drop'; add.onclick = () => addDrop();
+        el.append(document.createElement('br'), drops, add);
+      } else {
+        el = document.createElement('input'); el.type = f.type === 'number' ? 'number' : 'text';
+        if (value != null) el.value = Array.isArray(value) ? value.join(',') : value;
+      }
+      el.dataset.key = f.key; el.classList.add('fld');
+      wrap.appendChild(el); return wrap;
+    }
+
+    function readField(root, f) {
+      const el = root.querySelector('.fld[data-key="' + f.key + '"]');
+      if (f.type === 'number') return el.value === '' ? undefined : Number(el.value);
+      if (f.type === 'checkbox') return el.checked;
+      if (f.type === 'csv') return el.value ? el.value.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      if (f.type === 'multiselect') return [...el.querySelectorAll('input:checked')].map((c) => c.value);
+      if (f.type === 'skillrefs') return [...el.querySelectorAll('input:checked')].map((c) => c.value);
+      if (f.type === 'statgrid') {
+        const o = {}; for (const n of el.querySelectorAll('input[data-stat]')) if (n.value !== '') o[n.dataset.stat] = Number(n.value); return o;
+      }
+      if (f.type === 'effectrefs') {
+        return [...el.querySelectorAll('.effectref')].map((r) => {
+          const out = { id: r.querySelector('select').value };
+          const d = r.querySelector('.dur').value, m = r.querySelector('.mag').value;
+          if (d !== '') out.duration = Number(d); if (m !== '') out.magnitude = Number(m);
+          return out;
+        });
+      }
+      if (f.type === 'reward') {
+        const gMin = el.querySelector('.r-goldMin').value, gMax = el.querySelector('.r-goldMax').value, xp = el.querySelector('.r-xp').value;
+        const drops = [...el.querySelectorAll('.drop')].map((r) => ({ itemId: r.querySelector('select').value, chance: Number(r.querySelector('.chance').value) }));
+        const reward = {}; if (gMin !== '' && gMax !== '') reward.gold = [Number(gMin), Number(gMax)];
+        if (xp !== '') reward.xp = Number(xp); if (drops.length) reward.drops = drops;
+        return Object.keys(reward).length ? reward : undefined;
+      }
+      return el.value || undefined;
+    }
+
+    function renderCrud(resource) {
+      const spec = SPECS[resource];
+      const form = $(resource + '-form'); form.innerHTML = '';
+      let editingId = null;
+      const fieldsBox = document.createElement('div');
+      const renderForm = (entity) => {
+        fieldsBox.innerHTML = ''; editingId = entity ? entity.id : null;
+        for (const f of spec.fields) fieldsBox.appendChild(fieldInput(f, entity ? entity[f.key] : undefined));
+      };
+      const save = async () => {
+        const body = {}; for (const f of spec.fields) { const v = readField(fieldsBox, f); if (v !== undefined) body[f.key] = v; }
+        const msg = $(resource + '-msg'); msg.textContent = '';
+        try {
+          const path = '/admin/' + resource + (editingId ? '/' + editingId : '');
+          await api(path, { method: editingId ? 'PUT' : 'POST', headers: authHeaders(), body: JSON.stringify(body) });
+          msg.className = 'msg ok'; msg.textContent = 'Saved ' + (body.id || editingId);
+          await loadReg(); renderForm(null); loadCrud(resource);
+        } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+      };
+      const saveBtn = document.createElement('button'); saveBtn.textContent = 'Save'; saveBtn.onclick = save;
+      const clearBtn = document.createElement('button'); clearBtn.className = 'secondary'; clearBtn.textContent = 'Clear'; clearBtn.style.marginLeft = '8px'; clearBtn.onclick = () => renderForm(null);
+      form.append(fieldsBox, saveBtn, clearBtn);
+      renderForm(null);
+      form._edit = renderForm;
+    }
+
+    async function loadCrud(resource) {
+      const spec = SPECS[resource];
+      const head = $(resource + '-head'); head.innerHTML = '';
+      for (const c of spec.columns) { const th = document.createElement('th'); th.textContent = c; head.appendChild(th); }
+      head.appendChild(document.createElement('th'));
+      const body = $(resource + '-body'); body.innerHTML = '';
+      const rows = await api('/admin/' + resource, { headers: authHeaders() });
+      for (const row of rows) {
+        const tr = document.createElement('tr');
+        for (const c of spec.columns) {
+          const td = document.createElement('td'); const v = row[c];
+          td.textContent = Array.isArray(v) ? v.join(',') : (v && typeof v === 'object' ? JSON.stringify(v) : (v ?? ''));
+          tr.appendChild(td);
+        }
+        const td = document.createElement('td');
+        const edit = document.createElement('button'); edit.className = 'secondary'; edit.textContent = 'Edit';
+        edit.onclick = () => $(resource + '-form')._edit(row);
+        td.appendChild(edit);
+        if (!row.builtin) {
+          const del = document.createElement('button'); del.textContent = 'Delete'; del.style.marginLeft = '8px';
+          del.onclick = async () => {
+            const msg = $(resource + '-msg'); msg.textContent = '';
+            try { await api('/admin/' + resource + '/' + row.id, { method: 'DELETE', headers: authHeaders() }); await loadReg(); loadCrud(resource); }
+            catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+          };
+          td.appendChild(del);
+        }
+        tr.appendChild(td); body.appendChild(tr);
+      }
+    }
 
     async function api(path, opts = {}) {
       const res = await fetch(path, opts);
@@ -117,12 +481,36 @@
       $('login').classList.toggle('hidden', on);
       $('console').classList.toggle('hidden', !on);
       $('logout').classList.toggle('hidden', !on);
+      $('statusPill').classList.toggle('hidden', !on);
     }
 
     function logout() {
       token = '';
       localStorage.removeItem(TOKEN_KEY);
       showConsole(false);
+    }
+
+    // ---- Sidebar tab switching ----
+    function selectView(name) {
+      for (const btn of document.querySelectorAll('.navbtn')) {
+        btn.classList.toggle('active', btn.dataset.view === name);
+      }
+      for (const v of document.querySelectorAll('.view')) {
+        v.classList.toggle('hidden', v.id !== ('view-' + name));
+      }
+      // Leaving routes always returns to the list sub-screen.
+      if (name === 'routes') showRoutesList();
+      if (SPECS[name]) { renderCrud(name); loadCrud(name); }
+    }
+
+    function showRoutesList() {
+      $('routes-list').classList.remove('hidden');
+      $('routes-detail').classList.add('hidden');
+    }
+
+    function showRoutesDetail() {
+      $('routes-list').classList.add('hidden');
+      $('routes-detail').classList.remove('hidden');
     }
 
     async function doLogin() {
@@ -136,7 +524,8 @@
         token = body.token;
         localStorage.setItem(TOKEN_KEY, token);
         showConsole(true);
-        await Promise.all([loadStatus(), loadRoutes(), loadNovels()]);
+        selectView('routes');
+        await Promise.all([loadStatus(), loadRoutes(), loadNovels(), loadReg()]);
       } catch (e) {
         $('loginMsg').textContent = e.status === 401 ? 'Invalid credentials.' : ('Login failed: ' + e.message);
       }
@@ -144,12 +533,20 @@
 
     async function loadStatus() {
       const s = $('status');
+      const pill = $('statusPill');
       try {
         const body = await api('/admin/status', { headers: authHeaders() });
-        s.innerHTML = body.providerAvailable
-          ? 'Gemini provider: <span class="ok">available</span>'
-          : 'Gemini provider: <span class="warn">not configured</span> — set GEMINI_API_KEY in .env to enable generation.';
-      } catch (e) { s.innerHTML = '<span class="err">Status error: ' + e.message + '</span>'; }
+        if (body.providerAvailable) {
+          s.innerHTML = 'Gemini provider: <span class="ok">available</span>';
+          pill.textContent = 'Gemini: available'; pill.style.color = 'var(--ok)';
+        } else {
+          s.innerHTML = 'Gemini provider: <span class="warn">not configured</span> — set GEMINI_API_KEY in .env to enable generation.';
+          pill.textContent = 'Gemini: off'; pill.style.color = 'var(--warn)';
+        }
+      } catch (e) {
+        s.innerHTML = '<span class="err">Status error: ' + e.message + '</span>';
+        pill.textContent = 'status error'; pill.style.color = 'var(--err)';
+      }
     }
 
     async function loadRoutes() {
@@ -181,20 +578,18 @@
 
     async function viewRoute(id) {
       const bundle = await api('/admin/routes/' + id, { headers: authHeaders() });
-      const out = $('viewOut'); out.classList.remove('hidden');
-      out.textContent = JSON.stringify(bundle, null, 2);
+      $('detailTitle').textContent = (bundle.route && bundle.route.title ? bundle.route.title : 'Route') + ' — ' + id;
+      $('viewOut').textContent = JSON.stringify(bundle, null, 2);
       renderNodes(id, bundle);
+      showRoutesDetail();
     }
 
     function renderNodes(routeId, bundle) {
-      const box = $('nodesOut'); box.classList.remove('hidden'); box.innerHTML = '';
-      const h = document.createElement('h3');
-      h.style.fontSize = '13px'; h.textContent = 'Nodes — live AI generation & merchant stock';
-      box.appendChild(h);
+      const box = $('nodesOut'); box.innerHTML = '';
       const pool = Array.isArray(bundle.route && bundle.route.itemPool) ? bundle.route.itemPool : [];
       if (pool.length) {
         const hint = document.createElement('div');
-        hint.className = 'status muted';
+        hint.className = 'status';
         hint.style.color = 'var(--muted)'; hint.style.fontSize = '12px'; hint.style.marginBottom = '8px';
         hint.textContent = 'Route itemPool: ' + pool.join(', ');
         box.appendChild(hint);
@@ -202,7 +597,7 @@
       for (const nid of Object.keys(bundle.nodes)) {
         const node = bundle.nodes[nid];
         const card = document.createElement('div');
-        card.style.border = '1px solid #2a2e3a'; card.style.borderRadius = '6px';
+        card.style.border = '1px solid var(--line)'; card.style.borderRadius = '6px';
         card.style.padding = '10px'; card.style.margin = '8px 0';
 
         // Source toggle row
@@ -279,7 +674,7 @@
         msg.textContent = stock === null
           ? (nodeId + ' merchant cleared')
           : (nodeId + ' merchant set (' + stock.length + ' item' + (stock.length === 1 ? '' : 's') + ')');
-        await viewRoute(routeId); // refresh node list + JSON
+        await viewRoute(routeId); // refresh node list + JSON (stays on detail)
       } catch (e) {
         msg.className = 'msg err';
         msg.textContent = e.status === 404 ? 'Route or node not found.' : ('Error: ' + e.message);
@@ -293,7 +688,7 @@
           method: 'POST', headers: authHeaders(), body: JSON.stringify({ source }),
         });
         msg.className = 'msg ok'; msg.textContent = nodeId + ' → ' + source;
-        await viewRoute(routeId); // refresh node list + JSON
+        await viewRoute(routeId); // refresh node list + JSON (stays on detail)
       } catch (e) {
         msg.className = 'msg err';
         msg.textContent = e.status === 404 ? 'Route or node not found.' : ('Error: ' + e.message);
@@ -401,10 +796,22 @@
     $('logout').onclick = logout;
     $('genBtn').onclick = doGenerate;
     $('novelBtn').onclick = uploadNovel;
+    $('detailBack').onclick = showRoutesList;
+    for (const btn of document.querySelectorAll('.navbtn')) {
+      btn.onclick = () => selectView(btn.dataset.view);
+    }
 
     // Boot: if we already hold a token, try the console; a stale token bounces back to login on the first 401.
-    if (token) { showConsole(true); loadStatus(); loadRoutes().catch(() => {}); loadNovels().catch(() => {}); }
-    else { showConsole(false); }
+    if (token) {
+      showConsole(true);
+      selectView('routes');
+      loadStatus();
+      loadRoutes().catch(() => {});
+      loadNovels().catch(() => {});
+      loadReg().catch(() => {}); // populate content-view pickers (attributes/effects/skills/items) on reload too
+    } else {
+      showConsole(false);
+    }
   </script>
 </body>
 </html>

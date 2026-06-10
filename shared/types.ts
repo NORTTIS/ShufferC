@@ -1,5 +1,6 @@
-export type StatKey = 'str' | 'dex' | 'int' | 'wis' | 'cha' | 'con';
-export type Stats = Record<StatKey, number>;
+// Attributes are data-driven (see AttributeDef). StatKey is now any attribute id.
+export type StatKey = string;
+export type Stats = Record<string, number>;
 
 export interface ReputationDelta {
   hero?: number;
@@ -8,6 +9,32 @@ export interface ReputationDelta {
 }
 export type EffectKind = 'buff' | 'debuff' | 'dot' | 'hot' | 'control';
 export type EquipSlot = 'weapon' | 'armor' | 'ring' | 'scroll' | 'quest';
+
+export type AttributeRole = 'core' | 'defense' | 'maxHp';
+
+export interface AttributeDef {
+  id: string;                 // 'str', 'armor', ...
+  name: string;               // 'Strength'
+  abbrev: string;             // 'STR'
+  roles: AttributeRole[];     // how the engine consumes it
+  defaultBase?: number;       // value when an actor/save lacks this key (default 0)
+  builtin: boolean;           // the original 6 → cannot be deleted
+}
+
+export type EffectArchetype = 'dot' | 'hot' | 'statMod' | 'control';
+
+export interface EffectTemplate {
+  id: string;
+  name: string;
+  archetype: EffectArchetype;
+  kind: EffectKind;           // buff|debuff|dot|hot|control — normalized onto instances; drives hasControl + UI
+  stat?: string;              // required when archetype === 'statMod' (an AttributeDef.id)
+  magnitude?: number;         // default per-tick / per-apply amount
+  duration?: number;          // default remaining turns
+  instant?: boolean;          // duration-0 application: apply magnitude once, do not retain
+  sprite?: string;
+  builtin: boolean;
+}
 
 export interface StatusEffect {
   id: string;          // key into EFFECT_REGISTRY: "freeze" | "poison" | ...

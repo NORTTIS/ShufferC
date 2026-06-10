@@ -1,9 +1,27 @@
+import request from 'supertest';
 import { createGameSession } from './session';
 import { createMemoryStore } from './store/memoryStore';
 import { serialize, deserialize } from '../shared/engine/save';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
-import { ITEM_DB, SKILL_DB, ENEMY_DB } from '../shared/fixtures';
+import { createMemoryContentStores } from './store/contentStores';
+import { createApp } from './api';
+import { createFakeProvider } from './ai/provider';
+import { createFakeEmbedder } from './rag/embeddingProvider';
+import { createMemoryNovelStore } from './rag/novelStore';
+import { createAuth } from './auth';
+import { ITEM_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
 import { BACKGROUNDS } from '../shared/backgrounds';
+
+const ADMIN = { email: 'admin@test', password: 'pw' };
+function adminApp() {
+  const routes = createMemoryRouteStore([structuredClone(SAMPLE_BUNDLE)]);
+  const content = createMemoryContentStores();
+  const { novels, embeddings } = createMemoryNovelStore();
+  const provider = createFakeProvider([]);
+  const embedder = createFakeEmbedder();
+  const session = createGameSession(createMemoryStore(), { backgrounds: BACKGROUNDS, content, routes, provider, embedder, embeddings });
+  return createApp(session, { provider, routes, content, auth: createAuth(ADMIN), novels, embeddings, embedder });
+}
 
 describe('server e2e (hardcoded route)', () => {
   it('rogue sneaks past and reaches the keep', async () => {
@@ -52,7 +70,7 @@ function shopRouteDeps() {
     route: { id: 'shop-rt', title: 'Shop', sourceNovelId: 'x', acts: [{ id: 'a', title: 'A', nodeIds: ['s1'] }], itemPool: [], enemyPool: [], endings: [], status: 'published' as const },
     nodes: { s1: { id: 's1', source: 'pregen' as const, prose: 'A merchant waits.', choices: [], merchant: { stock: [{ itemId: 'dagger', price: 10 }] } } },
   };
-  return { backgrounds: BACKGROUNDS, itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, routes: createMemoryRouteStore([bundle]), random: () => 0 };
+  return { backgrounds: BACKGROUNDS, content: createMemoryContentStores(), routes: createMemoryRouteStore([bundle]), random: () => 0 };
 }
 
 describe('shop', () => {
@@ -94,5 +112,18 @@ describe('equip HP clamp', () => {
     const newMax = res.effectiveStats.con * 5 + 20; // deriveMaxHp = BASE_HP(20) + con*HP_PER_CON(5)
     expect(res.save.vitals.currentHp).toBeLessThanOrEqual(newMax);
     expect(res.save.vitals.currentHp).toBeLessThanOrEqual(before);
+  });
+});
+
+describe('admin-authored content is playable', () => {
+  it('an admin-authored attribute + item flows into the engine', async () => {
+    const a = adminApp();
+    const t = (await request(a).post('/admin/login').send(ADMIN)).body.token as string;
+    const h = { Authorization: `Bearer ${t}` };
+    await request(a).post('/admin/attributes').set(h).send({ id: 'armor', name: 'Armor', abbrev: 'ARM', roles: ['defense'] }).expect(200);
+    await request(a).post('/admin/items').set(h).send({ id: 'aegis', name: 'Aegis', slot: 'armor', kind: 'gear', statMods: { armor: 4 }, storyTags: [] }).expect(200);
+    // the item is now in the live registry the session reads
+    const list = await request(a).get('/admin/items').set(h);
+    expect(list.body.map((i: any) => i.id)).toContain('aegis');
   });
 });
