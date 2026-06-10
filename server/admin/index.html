@@ -227,6 +227,248 @@
 
     function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }; }
 
+    // ---- Registry cache + field specs ----
+    const REG = { attributes: [], effects: [], items: [], skills: [], enemies: [] };
+    async function loadReg() {
+      const [attributes, effects, items, skills, enemies] = await Promise.all(
+        ['attributes','effects','items','skills','enemies'].map((r) => api('/admin/' + r, { headers: authHeaders() }))
+      );
+      Object.assign(REG, { attributes, effects, items, skills, enemies });
+    }
+
+    // Field types: text, slug, number, select(options), checkbox,
+    //   statgrid (one number per attribute), effectrefs (repeatable effect picker), skillrefs (multi), drops (item+chance rows)
+    const SPECS = {
+      attributes: {
+        columns: ['id','name','abbrev','roles','builtin'],
+        fields: [
+          { key:'id', type:'slug', label:'ID' },
+          { key:'name', type:'text', label:'Name' },
+          { key:'abbrev', type:'text', label:'Abbrev' },
+          { key:'roles', type:'multiselect', label:'Roles', options:['core','defense','maxHp'] },
+          { key:'defaultBase', type:'number', label:'Default base (optional)' },
+        ],
+      },
+      effects: {
+        columns: ['id','name','archetype','kind','stat','magnitude','duration','builtin'],
+        fields: [
+          { key:'id', type:'slug', label:'ID' },
+          { key:'name', type:'text', label:'Name' },
+          { key:'archetype', type:'select', label:'Archetype', options:['dot','hot','statMod','control'] },
+          { key:'kind', type:'select', label:'Kind', options:['buff','debuff','dot','hot','control'] },
+          { key:'stat', type:'select', label:'Stat (statMod only)', optionsFrom:'attributes', optional:true },
+          { key:'magnitude', type:'number', label:'Magnitude' },
+          { key:'duration', type:'number', label:'Duration' },
+          { key:'instant', type:'checkbox', label:'Instant (duration 0)' },
+          { key:'sprite', type:'text', label:'Sprite (optional)' },
+        ],
+      },
+      items: {
+        columns: ['id','name','slot','kind','cost'],
+        fields: [
+          { key:'id', type:'slug', label:'ID' },
+          { key:'name', type:'text', label:'Name' },
+          { key:'slot', type:'select', label:'Slot', options:['weapon','armor','ring','scroll','quest'] },
+          { key:'kind', type:'select', label:'Kind', options:['gear','consumable'] },
+          { key:'cost', type:'number', label:'Cost' },
+          { key:'statMods', type:'statgrid', label:'Stat mods' },
+          { key:'onEquip', type:'effectrefs', label:'On equip' },
+          { key:'onUse', type:'effectrefs', label:'On use' },
+          { key:'grantsSkills', type:'skillrefs', label:'Grants skills' },
+          { key:'storyTags', type:'csv', label:'Story tags (comma-separated)' },
+          { key:'sprite', type:'text', label:'Sprite (optional)' },
+        ],
+      },
+      skills: {
+        columns: ['id','name','targetStat','power'],
+        fields: [
+          { key:'id', type:'slug', label:'ID' },
+          { key:'name', type:'text', label:'Name' },
+          { key:'targetStat', type:'select', label:'Target stat', optionsFrom:'attributes', optional:true },
+          { key:'effectTarget', type:'select', label:'Effect target', options:['enemy','self'], optional:true },
+          { key:'power', type:'number', label:'Power' },
+          { key:'effects', type:'effectrefs', label:'Effects' },
+          { key:'sprite', type:'text', label:'Sprite (optional)' },
+        ],
+      },
+      enemies: {
+        columns: ['id','name','hp'],
+        fields: [
+          { key:'id', type:'slug', label:'ID' },
+          { key:'name', type:'text', label:'Name' },
+          { key:'hp', type:'number', label:'HP' },
+          { key:'stats', type:'statgrid', label:'Stats' },
+          { key:'skillPriority', type:'skillrefs', label:'Skill priority' },
+          { key:'reward', type:'reward', label:'Reward' },
+        ],
+      },
+    };
+
+    function fieldInput(f, value) {
+      const wrap = document.createElement('div');
+      const lab = document.createElement('label'); lab.textContent = f.label; wrap.appendChild(lab);
+      let el;
+      if (f.type === 'select') {
+        el = document.createElement('select');
+        const opts = f.optionsFrom ? REG[f.optionsFrom].map((x) => x.id) : f.options;
+        if (f.optional) el.appendChild(new Option('—', ''));
+        for (const o of opts) el.appendChild(new Option(o, o));
+        if (value != null) el.value = value;
+      } else if (f.type === 'multiselect') {
+        el = document.createElement('div');
+        for (const o of f.options) {
+          const id = f.key + '_' + o;
+          const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = o; cb.id = id;
+          cb.checked = Array.isArray(value) && value.includes(o);
+          const l = document.createElement('label'); l.style.display = 'inline'; l.htmlFor = id; l.textContent = ' ' + o + '  ';
+          el.appendChild(cb); el.appendChild(l);
+        }
+      } else if (f.type === 'checkbox') {
+        el = document.createElement('input'); el.type = 'checkbox'; el.checked = !!value;
+      } else if (f.type === 'statgrid') {
+        el = document.createElement('div'); el.className = 'row'; el.style.flexWrap = 'wrap';
+        for (const a of REG.attributes) {
+          const d = document.createElement('div');
+          const l = document.createElement('label'); l.textContent = a.abbrev;
+          const n = document.createElement('input'); n.type = 'number'; n.dataset.stat = a.id;
+          n.value = (value && value[a.id] != null) ? value[a.id] : '';
+          d.appendChild(l); d.appendChild(n); el.appendChild(d);
+        }
+      } else if (f.type === 'effectrefs') {
+        el = document.createElement('div');
+        const addRow = (ref) => {
+          const r = document.createElement('div'); r.className = 'row effectref';
+          const sel = document.createElement('select');
+          for (const e of REG.effects) sel.appendChild(new Option(e.id, e.id));
+          if (ref) sel.value = ref.id;
+          const dur = document.createElement('input'); dur.type = 'number'; dur.placeholder = 'duration'; dur.className = 'dur'; dur.value = ref ? (ref.duration ?? '') : '';
+          const mag = document.createElement('input'); mag.type = 'number'; mag.placeholder = 'magnitude'; mag.className = 'mag'; mag.value = ref ? (ref.magnitude ?? '') : '';
+          const rm = document.createElement('button'); rm.className = 'secondary'; rm.textContent = '✕'; rm.onclick = () => r.remove();
+          r.append(sel, dur, mag, rm); el.appendChild(r);
+        };
+        (value || []).forEach(addRow);
+        const add = document.createElement('button'); add.className = 'secondary'; add.textContent = '+ effect'; add.onclick = () => addRow();
+        el.appendChild(add);
+      } else if (f.type === 'skillrefs') {
+        el = document.createElement('div');
+        for (const s of REG.skills) {
+          const id = f.key + '_' + s.id;
+          const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = s.id; cb.id = id;
+          cb.checked = Array.isArray(value) && value.includes(s.id);
+          const l = document.createElement('label'); l.style.display = 'inline'; l.htmlFor = id; l.textContent = ' ' + s.id + '  ';
+          el.append(cb, l);
+        }
+      } else if (f.type === 'reward') {
+        el = document.createElement('div');
+        el.innerHTML = '<input class="r-goldMin" type="number" placeholder="gold min"> <input class="r-goldMax" type="number" placeholder="gold max"> <input class="r-xp" type="number" placeholder="xp">';
+        const r = value || {};
+        if (r.gold) { el.querySelector('.r-goldMin').value = r.gold[0]; el.querySelector('.r-goldMax').value = r.gold[1]; }
+        if (r.xp != null) el.querySelector('.r-xp').value = r.xp;
+        // drops: itemId:chance rows
+        const drops = document.createElement('div');
+        const addDrop = (d) => {
+          const row = document.createElement('div'); row.className = 'row drop';
+          const sel = document.createElement('select'); for (const it of REG.items) sel.appendChild(new Option(it.id, it.id)); if (d) sel.value = d.itemId;
+          const ch = document.createElement('input'); ch.type = 'number'; ch.step = '0.1'; ch.className = 'chance'; ch.placeholder = 'chance 0–1'; ch.value = d ? d.chance : '';
+          const rm = document.createElement('button'); rm.className = 'secondary'; rm.textContent = '✕'; rm.onclick = () => row.remove();
+          row.append(sel, ch, rm); drops.appendChild(row);
+        };
+        (r.drops || []).forEach(addDrop);
+        const add = document.createElement('button'); add.className = 'secondary'; add.textContent = '+ drop'; add.onclick = () => addDrop();
+        el.append(document.createElement('br'), drops, add);
+      } else {
+        el = document.createElement('input'); el.type = f.type === 'number' ? 'number' : 'text';
+        if (value != null) el.value = Array.isArray(value) ? value.join(',') : value;
+      }
+      el.dataset.key = f.key; el.classList.add('fld');
+      wrap.appendChild(el); return wrap;
+    }
+
+    function readField(root, f) {
+      const el = root.querySelector('.fld[data-key="' + f.key + '"]');
+      if (f.type === 'number') return el.value === '' ? undefined : Number(el.value);
+      if (f.type === 'checkbox') return el.checked;
+      if (f.type === 'csv') return el.value ? el.value.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      if (f.type === 'multiselect') return [...el.querySelectorAll('input:checked')].map((c) => c.value);
+      if (f.type === 'skillrefs') return [...el.querySelectorAll('input:checked')].map((c) => c.value);
+      if (f.type === 'statgrid') {
+        const o = {}; for (const n of el.querySelectorAll('input[data-stat]')) if (n.value !== '') o[n.dataset.stat] = Number(n.value); return o;
+      }
+      if (f.type === 'effectrefs') {
+        return [...el.querySelectorAll('.effectref')].map((r) => {
+          const out = { id: r.querySelector('select').value };
+          const d = r.querySelector('.dur').value, m = r.querySelector('.mag').value;
+          if (d !== '') out.duration = Number(d); if (m !== '') out.magnitude = Number(m);
+          return out;
+        });
+      }
+      if (f.type === 'reward') {
+        const gMin = el.querySelector('.r-goldMin').value, gMax = el.querySelector('.r-goldMax').value, xp = el.querySelector('.r-xp').value;
+        const drops = [...el.querySelectorAll('.drop')].map((r) => ({ itemId: r.querySelector('select').value, chance: Number(r.querySelector('.chance').value) }));
+        const reward = {}; if (gMin !== '' && gMax !== '') reward.gold = [Number(gMin), Number(gMax)];
+        if (xp !== '') reward.xp = Number(xp); if (drops.length) reward.drops = drops;
+        return Object.keys(reward).length ? reward : undefined;
+      }
+      return el.value || undefined;
+    }
+
+    function renderCrud(resource) {
+      const spec = SPECS[resource];
+      const form = $(resource + '-form'); form.innerHTML = '';
+      let editingId = null;
+      const fieldsBox = document.createElement('div');
+      const renderForm = (entity) => {
+        fieldsBox.innerHTML = ''; editingId = entity ? entity.id : null;
+        for (const f of spec.fields) fieldsBox.appendChild(fieldInput(f, entity ? entity[f.key] : undefined));
+      };
+      const save = async () => {
+        const body = {}; for (const f of spec.fields) { const v = readField(fieldsBox, f); if (v !== undefined) body[f.key] = v; }
+        const msg = $(resource + '-msg'); msg.textContent = '';
+        try {
+          const path = '/admin/' + resource + (editingId ? '/' + editingId : '');
+          await api(path, { method: editingId ? 'PUT' : 'POST', headers: authHeaders(), body: JSON.stringify(body) });
+          msg.className = 'msg ok'; msg.textContent = 'Saved ' + (body.id || editingId);
+          await loadReg(); renderForm(null); loadCrud(resource);
+        } catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+      };
+      const saveBtn = document.createElement('button'); saveBtn.textContent = 'Save'; saveBtn.onclick = save;
+      const clearBtn = document.createElement('button'); clearBtn.className = 'secondary'; clearBtn.textContent = 'Clear'; clearBtn.style.marginLeft = '8px'; clearBtn.onclick = () => renderForm(null);
+      form.append(fieldsBox, saveBtn, clearBtn);
+      renderForm(null);
+      form._edit = renderForm;
+    }
+
+    async function loadCrud(resource) {
+      const spec = SPECS[resource];
+      const head = $(resource + '-head'); head.innerHTML = '';
+      for (const c of spec.columns) { const th = document.createElement('th'); th.textContent = c; head.appendChild(th); }
+      head.appendChild(document.createElement('th'));
+      const body = $(resource + '-body'); body.innerHTML = '';
+      const rows = await api('/admin/' + resource, { headers: authHeaders() });
+      for (const row of rows) {
+        const tr = document.createElement('tr');
+        for (const c of spec.columns) {
+          const td = document.createElement('td'); const v = row[c];
+          td.textContent = Array.isArray(v) ? v.join(',') : (v && typeof v === 'object' ? JSON.stringify(v) : (v ?? ''));
+          tr.appendChild(td);
+        }
+        const td = document.createElement('td');
+        const edit = document.createElement('button'); edit.className = 'secondary'; edit.textContent = 'Edit';
+        edit.onclick = () => $(resource + '-form')._edit(row);
+        td.appendChild(edit);
+        if (!row.builtin) {
+          const del = document.createElement('button'); del.textContent = 'Delete'; del.style.marginLeft = '8px';
+          del.onclick = async () => {
+            const msg = $(resource + '-msg'); msg.textContent = '';
+            try { await api('/admin/' + resource + '/' + row.id, { method: 'DELETE', headers: authHeaders() }); await loadReg(); loadCrud(resource); }
+            catch (e) { msg.className = 'msg err'; msg.textContent = e.message; }
+          };
+          td.appendChild(del);
+        }
+        tr.appendChild(td); body.appendChild(tr);
+      }
+    }
+
     async function api(path, opts = {}) {
       const res = await fetch(path, opts);
       if (res.status === 401) { logout(); throw new Error('unauthorized'); }
@@ -258,6 +500,7 @@
       }
       // Leaving routes always returns to the list sub-screen.
       if (name === 'routes') showRoutesList();
+      if (SPECS[name]) { renderCrud(name); loadCrud(name); }
     }
 
     function showRoutesList() {
@@ -282,7 +525,7 @@
         localStorage.setItem(TOKEN_KEY, token);
         showConsole(true);
         selectView('routes');
-        await Promise.all([loadStatus(), loadRoutes(), loadNovels()]);
+        await Promise.all([loadStatus(), loadRoutes(), loadNovels(), loadReg()]);
       } catch (e) {
         $('loginMsg').textContent = e.status === 401 ? 'Invalid credentials.' : ('Login failed: ' + e.message);
       }
