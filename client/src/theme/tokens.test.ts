@@ -1,4 +1,4 @@
-import { colors, space, radii, type, toneColor } from './tokens';
+import { colors, space, radii, type, toneColor, fonts, tilts } from './tokens';
 
 describe('theme tokens', () => {
   it('exposes the dark-fantasy palette', () => {
@@ -25,5 +25,20 @@ describe('theme tokens', () => {
     expect(toneColor('mana')).toBe(colors.mana);
     expect(toneColor('success')).toBe(colors.success);
     expect(toneColor('muted')).toBe(colors.inkMuted);
+  });
+
+  it('exposes the book palette', () => {
+    expect(colors.deskWood).toBe('#221710');
+    expect(colors.page).toBe('#f4ead6');
+    expect(colors.ink).toBe('#3a2f23');
+    expect(colors.noteYellow).toBe('#f5e9a9');
+    expect(colors.noteBlue).toBe('#cfe2ef');
+    expect(colors.notePink).toBe('#f0d4d2');
+  });
+
+  it('defines book typography and note tilts', () => {
+    expect(type.prose.fontFamily).toBe(fonts.serif);
+    expect(type.hand.fontFamily).toBe(fonts.hand);
+    expect(tilts.length).toBeGreaterThanOrEqual(4);
   });
 });
