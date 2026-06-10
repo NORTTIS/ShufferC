@@ -333,6 +333,8 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
           const res = resolveChoice(save, node, choiceId);
           res.save.character.skillPriority = [...skillPriority];
 
+          // Same fixed seed as runCombat (see START_SEED note): when per-session
+          // seeds land, rollRewards must be randomised together with combat.
           const reward = rollRewards(enemyDefs, mulberry32(save.seed));
           res.save.gold += reward.gold;
           res.save.xp += reward.xp;

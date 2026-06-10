@@ -334,15 +334,10 @@ describe('GameSession journal', () => {
     const s = newSession();
     const { sessionId } = await s.newGame('fighter');
     const res = await s.applyChoice(sessionId, 'fight', ['slash']);
-    expect(res.combat).toBeDefined();
-    if (res.combat!.winner === 'player') {
-      const entry = res.save.choiceLog[res.save.choiceLog.length - 1];
-      expect(entry.reward).toEqual({ gold: res.reward!.gold, xp: res.reward!.xp, itemIds: res.reward!.itemIds });
-      expect(res.journal[res.journal.length - 1].reward).toEqual(entry.reward);
-    } else {
-      // defeat path returns the pre-choice view; no journal entry is written
-      expect(res.journal).toHaveLength(0);
-    }
+    expect(res.combat!.winner).toBe('player'); // deterministic: START_SEED=7, fighter vs goblin
+    const entry = res.save.choiceLog[res.save.choiceLog.length - 1];
+    expect(entry.reward).toEqual({ gold: res.reward!.gold, xp: res.reward!.xp, itemIds: res.reward!.itemIds });
+    expect(res.journal[res.journal.length - 1].reward).toEqual(entry.reward);
   });
 });
 
