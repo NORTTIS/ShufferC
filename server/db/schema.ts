@@ -34,3 +34,11 @@ export const novelChunks = pgTable('novel_chunks', {
 }, (t) => ({
   embeddingIdx: index('novel_chunks_embedding_hnsw').using('hnsw', t.embedding.op('vector_cosine_ops')),
 }));
+
+// Content authoring: one row per entity, full object in `data` jsonb.
+const contentColumns = { id: text('id').primaryKey(), data: jsonb('data').notNull() };
+export const attributes = pgTable('attributes', contentColumns);
+export const effects = pgTable('effects', contentColumns);
+export const items = pgTable('items', contentColumns);
+export const skills = pgTable('skills', contentColumns);
+export const enemies = pgTable('enemies', contentColumns);
