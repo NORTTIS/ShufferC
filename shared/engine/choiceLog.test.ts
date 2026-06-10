@@ -1,6 +1,6 @@
 import { resolveChoice } from './story';
 import { mulberry32 } from './dice';
-import { SAMPLE_NODES, SAMPLE_CHARACTER, SAMPLE_ROUTE } from '../fixtures';
+import { SAMPLE_NODES, SAMPLE_CHARACTER } from '../fixtures';
 import { SAVE_VERSION } from '../constants';
 import { SaveState } from '../types';
 
