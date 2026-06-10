@@ -11,6 +11,7 @@ import { EmbeddingProvider } from './rag/embeddingProvider';
 import { ingestNovel } from './rag/ingest';
 import { retrieveContext } from './rag/retrieve';
 import { ContentStores } from './store/contentStores';
+import { registerContentRoutes } from './api/contentRoutes';
 
 type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
 
@@ -211,6 +212,9 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
     res.status(204).end();
     return undefined;
   }));
+
+  // ── Admin content CRUD (attributes/effects/items/skills/enemies) ─────
+  registerContentRoutes(app, admin.content, requireAuth(admin.auth), wrap);
 
   // Centralised error handler — maps GameError.status, defaults to 500.
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
