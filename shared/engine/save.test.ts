@@ -43,4 +43,17 @@ describe('save serialize/deserialize', () => {
     const s: SaveState = { ...v3save(), liveNodes: { n2: { prose: 'enriched', choiceTexts: ['go', 'stay'] } } };
     expect(deserialize(serialize(s))).toEqual(s);
   });
+
+  it('migrates a v3 save: version bumps to 4 and bare choiceLog entries survive', () => {
+    const v3 = {
+      version: 3, routeId: 'r1',
+      character: { background: 'rogue', baseStats: { str: 1, dex: 1, int: 1, wis: 1, cha: 1, con: 2 }, inventory: [], equipped: {}, skillPriority: [] },
+      reputation: { hero: 0, villain: 0, factions: {} },
+      flags: {}, choiceLog: [{ nodeId: 'n1', choiceId: 'go' }], currentNodeId: 'n2', seed: 1,
+      gold: 5, xp: 0, level: 1, consumables: {}, vitals: { currentHp: 10, pendingBuffs: [] },
+    };
+    const migrated = deserialize(JSON.stringify(v3));
+    expect(migrated.version).toBe(4);
+    expect(migrated.choiceLog).toEqual([{ nodeId: 'n1', choiceId: 'go' }]);
+  });
 });

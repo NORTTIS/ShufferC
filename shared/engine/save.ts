@@ -20,6 +20,7 @@ export function deserialize(json: string): SaveState {
     xp: data.xp ?? 0,
     level: data.level ?? 1,
     consumables: data.consumables ?? {},
+    choiceLog: data.choiceLog ?? [],
     vitals: data.vitals ?? { currentHp: BASE_HP + con * HP_PER_CON, pendingBuffs: [] as StatusEffect[] },
   };
   return migrated;
