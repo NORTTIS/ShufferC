@@ -10,6 +10,7 @@ import { effectiveStats, buildPlayerActor, buildEnemyActor, deriveMaxHp } from '
 import { rollRewards, Rewards } from '../shared/engine/rewards';
 import { runCombat } from '../shared/engine/combat';
 import { resolveChoice } from '../shared/engine/story';
+import { buildJournal, JournalEntry } from '../shared/engine/journal';
 import { mulberry32 } from '../shared/engine/dice';
 import { parseEndingCondition } from '../shared/endings';
 import { SaveStore } from './store/SaveStore';
@@ -59,6 +60,7 @@ export interface SessionView {
   save: SaveState;
   node: StoryNode;
   effectiveStats: Stats;
+  journal: JournalEntry[];
   ending?: string;
   hasNextRoute?: boolean;
 }
@@ -154,6 +156,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       save,
       node,
       effectiveStats: effectiveStats(save.character, itemDb),
+      journal: buildJournal(bundle, save),
       ending: computeEnding(save, bundle.route),
     };
   }
@@ -342,6 +345,8 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
             }
           }
           applyRepDelta(res.save.reputation, reward.repDelta);
+          const lastEntry = res.save.choiceLog[res.save.choiceLog.length - 1];
+          lastEntry.reward = { gold: reward.gold, xp: reward.xp, itemIds: reward.itemIds };
           res.save.vitals = { currentHp: player.hp, pendingBuffs: [] };
 
           await store.put(id, res.save);

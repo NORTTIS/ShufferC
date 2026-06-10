@@ -315,6 +315,37 @@ describe('GameSession.applyChoice — hasNextRoute', () => {
   });
 });
 
+describe('GameSession journal', () => {
+  it('serves a journal entry per choice and it survives a reload (getView)', async () => {
+    const s = newSession();
+    const { sessionId } = await s.newGame('rogue');
+    const choice = await s.applyChoice(sessionId, 'sneak');
+    expect(choice.journal).toHaveLength(1);
+    expect(choice.journal[0].prose).toBe('You reach a guarded gate.');
+    expect(choice.journal[0].chosenText).toBe('Sneak past');
+    expect(choice.journal[0].roll).toBe(choice.roll);
+
+    // a fresh view (reload) rebuilds the same journal from the save
+    const view = await s.getView(sessionId);
+    expect(view.journal).toEqual(choice.journal);
+  });
+
+  it('patches combat spoils onto the journal entry', async () => {
+    const s = newSession();
+    const { sessionId } = await s.newGame('fighter');
+    const res = await s.applyChoice(sessionId, 'fight', ['slash']);
+    expect(res.combat).toBeDefined();
+    if (res.combat!.winner === 'player') {
+      const entry = res.save.choiceLog[res.save.choiceLog.length - 1];
+      expect(entry.reward).toEqual({ gold: res.reward!.gold, xp: res.reward!.xp, itemIds: res.reward!.itemIds });
+      expect(res.journal[res.journal.length - 1].reward).toEqual(entry.reward);
+    } else {
+      // defeat path returns the pre-choice view; no journal entry is written
+      expect(res.journal).toHaveLength(0);
+    }
+  });
+});
+
 function liveBundle(): RouteBundle {
   return {
     route: {
