@@ -4,7 +4,14 @@
     "slug": "shufferc",
     "version": "0.1.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android", "web"],
-    "newArchEnabled": false
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "newArchEnabled": false,
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

@@ -1,6 +1,9 @@
 import React from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import { CrimsonPro_400Regular, CrimsonPro_600SemiBold } from '@expo-google-fonts/crimson-pro';
+import { PatrickHand_400Regular } from '@expo-google-fonts/patrick-hand';
 import { useAuth } from './src/hooks/useAuth';
 import { useGameSession } from './src/hooks/useGameSession';
 import { AuthScreen } from './src/screens/Auth';
@@ -16,10 +19,13 @@ import { colors, space } from './src/theme';
 const APP_TITLE = 'ShufferC';
 
 export default function App() {
+  const [fontsLoaded, fontError] = useFonts({
+    CrimsonPro_400Regular, CrimsonPro_600SemiBold, PatrickHand_400Regular,
+  });
   const auth = useAuth();
   const { state, start, choose, enterCombat, fight, equip, buy, useItem, openShop, goTo, continueRoute } = useGameSession();
 
-  if (auth.status === 'loading') {
+  if (auth.status === 'loading' || (!fontsLoaded && !fontError)) {
     return (
       <Screen center scroll={false}>
         <View style={styles.splash}>
