@@ -808,6 +808,7 @@
       loadStatus();
       loadRoutes().catch(() => {});
       loadNovels().catch(() => {});
+      loadReg().catch(() => {}); // populate content-view pickers (attributes/effects/skills/items) on reload too
     } else {
       showConsole(false);
     }
