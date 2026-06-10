@@ -1,0 +1,24 @@
+import { GameError } from '../session';
+import { validateAttribute, validateEffect, validateItem, validateSkill, validateEnemy } from './contentValidation';
+import { ATTRIBUTE_DB, EFFECT_DB, ITEM_DB, SKILL_DB } from '../../shared/fixtures';
+
+const ctx = { attributes: ATTRIBUTE_DB, effects: EFFECT_DB, items: ITEM_DB, skills: SKILL_DB };
+
+describe('content validation', () => {
+  it('accepts a valid attribute and rejects unknown roles', () => {
+    expect(validateAttribute({ id: 'armor', name: 'Armor', abbrev: 'ARM', roles: ['defense'] }).builtin).toBe(false);
+    expect(() => validateAttribute({ id: 'x', name: 'X', abbrev: 'X', roles: ['nope'] })).toThrow(GameError);
+  });
+  it('requires a valid stat for statMod effects', () => {
+    expect(() => validateEffect({ id: 'e', name: 'E', archetype: 'statMod', kind: 'buff' }, ctx)).toThrow(/stat/);
+    expect(validateEffect({ id: 'e', name: 'E', archetype: 'statMod', kind: 'buff', stat: 'str', magnitude: 2 }, ctx).stat).toBe('str');
+  });
+  it('rejects items whose stat-mod key or effect ref is unknown', () => {
+    expect(() => validateItem({ id: 'i', name: 'I', slot: 'weapon', kind: 'gear', statMods: { ghost: 1 } }, ctx)).toThrow(/ghost/);
+    expect(() => validateItem({ id: 'i', name: 'I', slot: 'weapon', kind: 'gear', onUse: [{ id: 'nope', kind: 'hot', duration: 0 }] }, ctx)).toThrow(/nope/);
+  });
+  it('rejects skills/enemies with unknown references', () => {
+    expect(() => validateSkill({ id: 's', name: 'S', targetStat: 'ghost' }, ctx)).toThrow(/ghost/);
+    expect(() => validateEnemy({ id: 'en', name: 'En', stats: { str: 1 }, hp: 5, skillPriority: ['ghost'] }, ctx)).toThrow(/ghost/);
+  });
+});
