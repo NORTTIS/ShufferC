@@ -7,7 +7,7 @@ import { createMemoryContentStores } from './store/contentStores';
 import { createFakeProvider, AIProvider } from './ai/provider';
 import { createAuth } from './auth';
 import { BACKGROUNDS } from '../shared/backgrounds';
-import { ITEM_DB, SKILL_DB, ENEMY_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
+import { SAMPLE_BUNDLE } from '../shared/fixtures';
 import { createMemoryNovelStore } from './rag/novelStore';
 import { createFakeEmbedder, EmbeddingProvider } from './rag/embeddingProvider';
 
@@ -19,13 +19,14 @@ function app(
 ) {
   const routes = createMemoryRouteStore([structuredClone(SAMPLE_BUNDLE)]);
   const { novels, embeddings } = createMemoryNovelStore();
+  const content = createMemoryContentStores();
   const session = createGameSession(createMemoryStore(), {
-    backgrounds: BACKGROUNDS, content: createMemoryContentStores(),
+    backgrounds: BACKGROUNDS, content,
     routes, provider, embedder, embeddings,
   });
   return createApp(session, {
     provider, routes,
-    registries: { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB },
+    content,
     auth: createAuth(ADMIN),
     novels, embeddings, embedder,
   });
