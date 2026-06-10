@@ -10,7 +10,7 @@ export function deserialize(json: string): SaveState {
   if (data.version > SAVE_VERSION) {
     throw new Error(`Unsupported save version ${data.version}, max ${SAVE_VERSION}`);
   }
-  // Backfill fields added in v3. deserialize has no item DB, so currentHp is
+  // Backfill fields added in v3/v4. deserialize has no item DB, so currentHp is
   // approximated from baseStats con; the session clamps it to the equip-adjusted max.
   const con = data.character?.baseStats?.con ?? 0;
   const migrated: SaveState = {

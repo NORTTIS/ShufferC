@@ -2,7 +2,7 @@ import { serialize, deserialize } from './save';
 import { SAVE_VERSION, BASE_HP, HP_PER_CON } from '../constants';
 import { SaveState } from '../types';
 
-function v3save(): SaveState {
+function currentSave(): SaveState {
   return {
     version: SAVE_VERSION, routeId: 'r1',
     character: { background: 'rogue', baseStats: { str: 1, dex: 1, int: 1, wis: 1, cha: 1, con: 4 }, inventory: [], equipped: {}, skillPriority: [] },
@@ -13,8 +13,8 @@ function v3save(): SaveState {
 }
 
 describe('save serialize/deserialize', () => {
-  it('round-trips a current (v3) save unchanged', () => {
-    const s = v3save();
+  it('round-trips a current save unchanged', () => {
+    const s = currentSave();
     expect(deserialize(serialize(s))).toEqual(s);
   });
 
@@ -39,8 +39,8 @@ describe('save serialize/deserialize', () => {
     expect(() => deserialize(JSON.stringify({ version: 99 }))).toThrow(/version/i);
   });
 
-  it('round-trips a v3 save carrying liveNodes overlays', () => {
-    const s: SaveState = { ...v3save(), liveNodes: { n2: { prose: 'enriched', choiceTexts: ['go', 'stay'] } } };
+  it('round-trips a current save carrying liveNodes overlays', () => {
+    const s: SaveState = { ...currentSave(), liveNodes: { n2: { prose: 'enriched', choiceTexts: ['go', 'stay'] } } };
     expect(deserialize(serialize(s))).toEqual(s);
   });
 
@@ -55,5 +55,11 @@ describe('save serialize/deserialize', () => {
     const migrated = deserialize(JSON.stringify(v3));
     expect(migrated.version).toBe(4);
     expect(migrated.choiceLog).toEqual([{ nodeId: 'n1', choiceId: 'go' }]);
+  });
+
+  it('backfills an empty choiceLog when the field is missing entirely', () => {
+    const { choiceLog: _omitted, ...withoutLog } = currentSave();
+    const migrated = deserialize(JSON.stringify(withoutLog));
+    expect(migrated.choiceLog).toEqual([]);
   });
 });
