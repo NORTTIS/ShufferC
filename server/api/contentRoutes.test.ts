@@ -55,4 +55,15 @@ describe('admin content CRUD', () => {
     expect((await request(a).post('/admin/skills').set(auth(t)).send({ id: 'jab', name: 'Jab', targetStat: 'str' })).status).toBe(409);
     expect((await request(a).put('/admin/skills/ghost').set(auth(t)).send({ id: 'ghost', name: 'G' })).status).toBe(404);
   });
+
+  it('PUT builtin attribute preserves builtin flag; DELETE still blocked after edit', async () => {
+    const a = app(); const t = await token(a);
+    const putRes = await request(a).put('/admin/attributes/str').set(auth(t)).send({ id: 'str', name: 'Strength!', abbrev: 'STR', roles: ['core'] });
+    expect(putRes.status).toBe(200);
+    expect(putRes.body.builtin).toBe(true);
+    const getRes = await request(a).get('/admin/attributes').set(auth(t));
+    const str = getRes.body.find((x: any) => x.id === 'str');
+    expect(str?.builtin).toBe(true);
+    expect((await request(a).delete('/admin/attributes/str').set(auth(t))).status).toBe(400);
+  });
 });

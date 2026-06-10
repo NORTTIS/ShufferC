@@ -55,6 +55,7 @@ export function registerContentRoutes(
       const existing = await cfg.store(stores).get(id);
       if (!existing) throw new GameError(`${id} not found`, 404);
       const entity = cfg.validate({ ...(req.body ?? {}), id }, await buildCtx(stores));
+      if (cfg.isBuiltin?.(existing)) (entity as { builtin?: boolean }).builtin = true;
       try { return await cfg.store(stores).update(id, entity); }
       catch (e) { if (e instanceof StoreError && e.kind === 'notFound') throw new GameError(e.message, 404); throw e; }
     }));
