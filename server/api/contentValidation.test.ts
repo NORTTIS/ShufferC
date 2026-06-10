@@ -21,4 +21,16 @@ describe('content validation', () => {
     expect(() => validateSkill({ id: 's', name: 'S', targetStat: 'ghost' }, ctx)).toThrow(/ghost/);
     expect(() => validateEnemy({ id: 'en', name: 'En', stats: { str: 1 }, hp: 5, skillPriority: ['ghost'] }, ctx)).toThrow(/ghost/);
   });
+  it('rejects non-array array fields with GameError 400, not TypeError', () => {
+    expect(() => validateItem({ id: 'i', name: 'I', slot: 'weapon', kind: 'gear', onUse: 'bad' }, ctx)).toThrow(GameError);
+    expect(() => validateItem({ id: 'i', name: 'I', slot: 'weapon', kind: 'gear', onEquip: 42 }, ctx)).toThrow(GameError);
+    expect(() => validateItem({ id: 'i', name: 'I', slot: 'weapon', kind: 'gear', grantsSkills: {} }, ctx)).toThrow(GameError);
+    expect(() => validateSkill({ id: 's', name: 'S', effects: 'bad' }, ctx)).toThrow(GameError);
+    expect(() => validateEnemy({ id: 'en', name: 'E', stats: { str: 1 }, hp: 5, skillPriority: 42 }, ctx)).toThrow(GameError);
+  });
+  it('rejects non-object object fields with GameError 400, not confusing message', () => {
+    expect(() => validateItem({ id: 'i', name: 'I', slot: 'weapon', kind: 'gear', statMods: 'bad' }, ctx)).toThrow(GameError);
+    expect(() => validateItem({ id: 'i', name: 'I', slot: 'weapon', kind: 'gear', statMods: [1, 2] }, ctx)).toThrow(GameError);
+    expect(() => validateEnemy({ id: 'en', name: 'E', stats: 'bad', hp: 5 }, ctx)).toThrow(GameError);
+  });
 });
