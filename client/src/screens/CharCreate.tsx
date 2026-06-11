@@ -4,15 +4,22 @@ import { Desk, BookPage, InkProse, ChoiceLine, PaperNote, NoteText } from '../co
 import { colors, space, type } from '../theme';
 import { formatStats } from '../lib/format';
 import { gameApi } from '../services/api';
+import type { SaveSummary } from '../services/api';
 import type { Background } from '../../../shared/backgrounds';
 
-export function CharCreate({ onPick, busy }: { onPick: (id: string) => void; busy: boolean }) {
+export function CharCreate({ onPick, onResume, busy }: {
+  onPick: (id: string) => void;
+  onResume: (saveId: string) => void;
+  busy: boolean;
+}) {
   const [backgrounds, setBackgrounds] = useState<Background[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saves, setSaves] = useState<SaveSummary[] | null>(null);
 
   useEffect(() => {
     gameApi.listBackgrounds().then(setBackgrounds).catch((e) => setError(String(e.message)));
+    gameApi.listSaves().then(setSaves).catch(() => setSaves([])); // continue list is best-effort
   }, []);
 
   if (error) {
@@ -35,6 +42,17 @@ export function CharCreate({ onPick, busy }: { onPick: (id: string) => void; bus
   return (
     <Desk center>
       <BookPage>
+        {saves && saves.length > 0 && (
+          <>
+            <Text style={styles.chapter}>continue</Text>
+            {saves.map((s) => (
+              <Pressable key={s.id} disabled={busy} onPress={() => onResume(s.id)} style={styles.bg}>
+                <Text style={styles.name}>{s.routeId}</Text>
+                <Text style={styles.stats}>{new Date(s.updatedAt).toLocaleString()}</Text>
+              </Pressable>
+            ))}
+          </>
+        )}
         <Text style={styles.chapter}>prologue</Text>
         <InkProse>Every story begins with a soul. Choose whose tale this book will tell.</InkProse>
         {backgrounds.map((bg) => (

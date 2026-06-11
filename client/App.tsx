@@ -23,7 +23,7 @@ export default function App() {
     CrimsonPro_400Regular, CrimsonPro_600SemiBold, PatrickHand_400Regular,
   });
   const auth = useAuth();
-  const { state, start, choose, enterCombat, fight, equip, buy, useItem, openShop, goTo, continueRoute } = useGameSession();
+  const { state, start, resume, choose, enterCombat, fight, equip, buy, useItem, openShop, goTo, continueRoute } = useGameSession();
 
   if (auth.status === 'loading' || (!fontsLoaded && !fontError)) {
     return (
@@ -62,7 +62,7 @@ export default function App() {
 
       <View style={styles.body}>
         {state.screen === 'charcreate' && (
-          <CharCreate onPick={start} busy={state.busy} />
+          <CharCreate onPick={start} onResume={resume} busy={state.busy} />
         )}
 
         {state.screen === 'story' && state.view && (
