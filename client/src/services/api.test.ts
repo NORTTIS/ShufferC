@@ -87,6 +87,8 @@ describe('gameApi auth handling', () => {
     expect(res).toEqual([{ id: 's1', routeId: 'r1', updatedAt: 'now' }]);
     expect(f).toHaveBeenCalledTimes(3);
     expect(f.mock.calls[1][0]).toContain('/auth/refresh');
+    expect((f.mock.calls[1][1] as RequestInit).body).toContain('rt-1');
+    expect((f.mock.calls[2][1] as RequestInit & { headers: Record<string, string> }).headers.Authorization).toBe('Bearer at-2');
     expect(changes).toEqual([{ token: 'at-2', refreshToken: 'rt-2' }]);
   });
 
@@ -100,6 +102,54 @@ describe('gameApi auth handling', () => {
     onApiSessionChange((s) => changes.push(s));
     await expect(gameApi.listSaves()).rejects.toMatchObject({ status: 401 });
     expect(changes).toEqual([null]);
+  });
+
+  it('does not attempt refresh when no session is set', async () => {
+    const f = jest.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) });
+    global.fetch = f as unknown as typeof fetch;
+    await expect(gameApi.listSaves()).rejects.toMatchObject({ status: 401 });
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh on a 401 from /auth endpoints', async () => {
+    const f = jest.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: 'Invalid email or password' }) });
+    global.fetch = f as unknown as typeof fetch;
+    setApiSession({ token: 'at-1', refreshToken: 'rt-1' });
+    await expect(gameApi.login('p@m.co', 'wrong1')).rejects.toMatchObject({ status: 401 });
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it('concurrent 401s share a single refresh', async () => {
+    const f = jest.fn(async (url: string, init?: RequestInit) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/auth/refresh')) {
+        return { ok: true, status: 200, json: async () => ({ token: 'at-2', refreshToken: 'rt-2', user: { id: 'u1', email: 'p@m.co' } }) };
+      }
+      const auth = (init?.headers as Record<string, string>)?.Authorization ?? '';
+      if (auth === 'Bearer at-1') {
+        return { ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) };
+      }
+      return { ok: true, status: 200, json: async () => [] };
+    });
+    global.fetch = f as unknown as typeof fetch;
+    setApiSession({ token: 'at-1', refreshToken: 'rt-1' });
+    const [r1, r2] = await Promise.all([gameApi.listSaves(), gameApi.listSaves()]);
+    expect(r1).toEqual([]);
+    expect(r2).toEqual([]);
+    const refreshCalls = f.mock.calls.filter(([url]) => String(url).includes('/auth/refresh'));
+    expect(refreshCalls).toHaveLength(1);
+  });
+
+  it('a 5xx refresh failure keeps the session (no forced logout)', async () => {
+    const f = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) })
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ error: 'boom' }) });
+    global.fetch = f as unknown as typeof fetch;
+    const changes: unknown[] = [];
+    setApiSession({ token: 'at-1', refreshToken: 'rt-1' });
+    onApiSessionChange((s) => changes.push(s));
+    await expect(gameApi.listSaves()).rejects.toMatchObject({ status: 401 });
+    expect(changes).toEqual([]);
   });
 
   it('register POSTs credentials and returns the session', async () => {

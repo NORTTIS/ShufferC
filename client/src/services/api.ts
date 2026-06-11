@@ -61,7 +61,14 @@ async function rawCall<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-async function tryRefresh(): Promise<boolean> {
+let refreshInFlight: Promise<boolean> | null = null;
+
+function tryRefresh(): Promise<boolean> {
+  refreshInFlight ??= doRefresh().finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
+async function doRefresh(): Promise<boolean> {
   if (!session) return false;
   try {
     const next = await rawCall<AuthSession>('/auth/refresh', {
@@ -71,9 +78,11 @@ async function tryRefresh(): Promise<boolean> {
     session = { token: next.token, refreshToken: next.refreshToken };
     sessionListener(session);
     return true;
-  } catch {
-    session = null;
-    sessionListener(null);
+  } catch (err) {
+    if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+      session = null;
+      sessionListener(null);
+    }
     return false;
   }
 }
