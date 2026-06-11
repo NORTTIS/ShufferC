@@ -20,6 +20,13 @@ export function isValidPassword(pw: string): boolean {
 
 interface StoredSession { token: string; refreshToken: string; user: AuthUser; }
 
+/**
+ * Creates the server-backed auth core for this app.
+ *
+ * **Singleton constraint:** claims the api layer's single `onApiSessionChange`
+ * listener slot, so only one core may exist per app. `useAuth` holds the
+ * singleton instance.
+ */
 export function createAuthCore(store: PlayerStore) {
   for (const k of LEGACY_KEYS) store.remove(k);
 

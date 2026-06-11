@@ -14,6 +14,7 @@ export function useAuth() {
     core.onLogout(() => setState({ user: null, status: 'out' })); // refresh failed → back to login
     const user = core.restore();
     setState({ user, status: user ? 'in' : 'out' });
+    return () => core.onLogout(() => {});
   }, []);
 
   const register = useCallback(async (email: string, pw: string, confirm: string): Promise<AuthResult> => {

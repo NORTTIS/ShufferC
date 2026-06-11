@@ -85,6 +85,19 @@ describe('createAuthCore (server-backed)', () => {
     expect(store.get('shufferc_player')).toBeNull();
   });
 
+  it('persists rotated tokens (keeping the user) after a successful auto-refresh', async () => {
+    const store = createMemoryStore({ shufferc_session: JSON.stringify(SESSION_BODY) });
+    const c = createAuthCore(store);
+    c.restore();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ token: 'at-2', refreshToken: 'rt-2', user: SESSION_BODY.user }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [] }) as unknown as typeof fetch;
+    const { gameApi } = await import('../services/api');
+    await expect(gameApi.listSaves()).resolves.toEqual([]);
+    expect(JSON.parse(store.get('shufferc_session')!)).toEqual({ token: 'at-2', refreshToken: 'rt-2', user: SESSION_BODY.user });
+  });
+
   it('fires onLogout when a token refresh fails (forced logout)', async () => {
     const store = createMemoryStore({ shufferc_session: JSON.stringify(SESSION_BODY) });
     const c = createAuthCore(store);
