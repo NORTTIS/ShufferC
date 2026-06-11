@@ -3,6 +3,7 @@ import type {
 } from '../../../shared/types';
 import type { Background } from '../../../shared/backgrounds';
 import type { Rewards } from '../../../shared/engine/rewards';
+import type { JournalEntry } from '../../../shared/engine/journal';
 import { config } from '../config';
 
 export class ApiError extends Error {
@@ -16,6 +17,7 @@ export interface SessionView {
   save: SaveState;
   node: StoryNode;
   effectiveStats: Stats;
+  journal: JournalEntry[];
   ending?: string;
   hasNextRoute?: boolean;
 }

@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Screen, Heading, Prose, Tag, StatRow, Button, Divider } from '../components';
-import { space } from '../theme';
+import { View, Text, StyleSheet } from 'react-native';
+import { Desk, BookPage, InkProse, ChoiceLine, InkStamp, PaperNote, NoteText } from '../components';
+import { colors, space, type, tilts } from '../theme';
+import { formatStats } from '../lib/format';
 import type { SessionView, ChoiceView } from '../services/api';
 
 export function Ending({
@@ -17,48 +18,53 @@ export function Ending({
 
   if (canContinue) {
     return (
-      <Screen>
-        <View style={styles.wrap}>
-          <Heading level="display">The End</Heading>
-          <Divider />
-          <Prose>{view.node.prose}</Prose>
-          {view.ending && <Tag text={`Ending: ${view.ending}`} tone="gold" />}
-          <Button label="Continue" busy={busy} onPress={onContinue} />
-        </View>
-      </Screen>
+      <Desk center>
+        <BookPage>
+          <Text style={styles.chapter}>epilogue</Text>
+          <InkProse animate>{view.node.prose}</InkProse>
+          {view.ending && <InkStamp text={`ending: ${view.ending}`} tone="green" />}
+          <ChoiceLine text="Write the next chapter" disabled={busy} onPress={onContinue} />
+        </BookPage>
+      </Desk>
     );
   }
 
   if (isDefeat) {
     return (
-      <Screen>
-        <View style={styles.wrap}>
-          <Heading level="display">You have fallen.</Heading>
-          <Divider />
-          <Prose>{view.node.prose}</Prose>
-        </View>
-      </Screen>
+      <Desk center>
+        <BookPage>
+          <Text style={styles.chapter}>the final page</Text>
+          <InkProse animate>{view.node.prose}</InkProse>
+          <InkStamp text="you have fallen" tone="red" />
+        </BookPage>
+      </Desk>
     );
   }
 
   // Finale: no further published routes remain.
-  const stats = view.effectiveStats;
   const rep = view.save.reputation;
   const routesPlayed = view.save.playedRouteIds?.length ?? 1;
   return (
-    <Screen>
-      <View style={styles.wrap}>
-        <Heading level="display">Your journey ends</Heading>
-        <Divider />
-        <Prose>{view.node.prose}</Prose>
-        <Tag text={`Routes completed: ${routesPlayed}`} tone="gold" />
-        <StatRow stats={stats} />
-        <Tag text={`Reputation — hero ${rep.hero} · villain ${rep.villain}`} tone="muted" />
+    <Desk center>
+      <BookPage>
+        <Text style={styles.chapter}>the book closes</Text>
+        <InkProse animate>{view.node.prose}</InkProse>
+        {view.ending && <InkStamp text={`ending: ${view.ending}`} tone="ink" />}
+      </BookPage>
+      <View style={styles.notes}>
+        <PaperNote tone="yellow" tilt={tilts[0]}>
+          <NoteText>chapters written: {routesPlayed}</NoteText>
+          <NoteText>{formatStats(view.effectiveStats, true)}</NoteText>
+        </PaperNote>
+        <PaperNote tone="pink" tilt={tilts[1]}>
+          <NoteText>hero {rep.hero} · villain {rep.villain}</NoteText>
+        </PaperNote>
       </View>
-    </Screen>
+    </Desk>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: space.md },
+  chapter: { ...type.chapter, color: colors.inkFaded, textTransform: 'uppercase' },
+  notes: { flexDirection: 'row', gap: space.xl, justifyContent: 'center' },
 });

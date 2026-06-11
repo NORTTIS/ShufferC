@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Screen, Heading, Card, Button, Label, StatRow } from '../components';
-import { colors, space } from '../theme';
+import { Desk, BookPage, InkButton, ChoiceLine } from '../components';
+import { colors, space, type } from '../theme';
 import { sprite } from '../assets';
+import { formatStats } from '../lib/format';
 import type { SessionView } from '../services/api';
 
 export function Inventory({
@@ -15,50 +16,50 @@ export function Inventory({
   onBack: () => void;
 }) {
   const equipped = view.save.character.equipped;
-  const stats = view.effectiveStats;
 
   return (
-    <Screen>
-      <Heading level="title">Equipment</Heading>
-      <StatRow stats={stats} full />
+    <Desk>
+      <BookPage tone="note">
+        <Text style={styles.title}>satchel & gear</Text>
+        <Text style={styles.line}>{formatStats(view.effectiveStats, true)}</Text>
+        <Text style={styles.line}>HP {view.save.vitals.currentHp} ❤</Text>
 
-      <Label>Equipped</Label>
-      {Object.entries(equipped).map(([slot, id]) => {
-        if (!id) return null;
-        return (
-          <Card key={slot}>
-            <View style={styles.row}>
+        <Text style={styles.section}>— equipped —</Text>
+        {Object.entries(equipped).map(([slot, id]) => {
+          if (!id) return null;
+          return (
+            <View key={slot} style={styles.row}>
               <Text style={styles.item}>{slot}: {sprite('item.' + id)} {id}</Text>
-              <Button label="Unequip" variant="ghost" disabled={busy} onPress={() => onEquip(slot, null)} />
+              <InkButton label="unequip" disabled={busy} onPress={() => onEquip(slot, null)} />
             </View>
-          </Card>
-        );
-      })}
+          );
+        })}
 
-      <Label>Inventory</Label>
-      {view.save.character.inventory.map((id) => (
-        <Card key={id}>
-          <Text style={styles.item}>{sprite('item.' + id)} {id}</Text>
-        </Card>
-      ))}
-
-      <Label>Consumables</Label>
-      {Object.entries(view.save.consumables).map(([id, qty]) => (
-        <Card key={id}>
-          <View style={styles.row}>
-            <Text style={styles.item}>{sprite('item.' + id)} {id} ×{qty}</Text>
-            <Button label="Use" variant="ghost" disabled={busy} onPress={() => onUse(id)} />
+        <Text style={styles.section}>— carried —</Text>
+        {view.save.character.inventory.map((id, i) => (
+          <View key={`${id}-${i}`} style={styles.row}>
+            <Text style={styles.item}>{sprite('item.' + id)} {id}</Text>
           </View>
-        </Card>
-      ))}
-      <Label>HP: {view.save.vitals.currentHp}</Label>
+        ))}
 
-      <Button label="Back to story" variant="ghost" disabled={busy} onPress={onBack} />
-    </Screen>
+        <Text style={styles.section}>— potions & scrolls —</Text>
+        {Object.entries(view.save.consumables).map(([id, qty]) => (
+          <View key={id} style={styles.row}>
+            <Text style={styles.item}>{sprite('item.' + id)} {id} ×{qty}</Text>
+            <InkButton label="use" disabled={busy} onPress={() => onUse(id)} />
+          </View>
+        ))}
+
+        <ChoiceLine text="Back to the story" disabled={busy} onPress={onBack} />
+      </BookPage>
+    </Desk>
   );
 }
 
 const styles = StyleSheet.create({
+  title: { ...type.chapter, color: colors.noteInk, textTransform: 'uppercase' },
+  line: { ...type.handSmall, color: colors.noteInk },
+  section: { ...type.handSmall, color: colors.noteInk, opacity: 0.7, marginTop: space.sm },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
-  item: { fontSize: 15, color: colors.inkPrimary, flexShrink: 1 },
+  item: { ...type.hand, color: colors.noteInk, flexShrink: 1 },
 });

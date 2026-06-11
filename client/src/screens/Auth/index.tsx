@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, TextInput, StyleSheet } from 'react-native';
-import { Screen, Card, Button, Heading, Prose, Label, Banner, Divider } from '../../components';
-import { colors, radii, space } from '../../theme';
+import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { Desk, BookPage, InkButton, ChoiceLine, PaperNote, NoteText } from '../../components';
+import { colors, space, type } from '../../theme';
 import type { AuthResult } from '../../auth/authCore';
 
 export function AuthScreen({
@@ -23,25 +23,18 @@ export function AuthScreen({
   };
 
   return (
-    <Screen center>
-      <View style={styles.brand}>
-        <Heading level="display">ShufferC</Heading>
-        <Label>AI Chronicles</Label>
-      </View>
-      <Divider />
-      <Card>
+    <Desk center maxWidth={460}>
+      <BookPage>
+        <Text style={styles.brand}>ShufferC</Text>
+        <Text style={styles.sub}>AI Chronicles</Text>
         <View style={styles.tabs}>
-          <View style={styles.tab}>
-            <Button label="Log in" variant={mode === 'login' ? 'primary' : 'ghost'} onPress={() => switchMode('login')} />
-          </View>
-          <View style={styles.tab}>
-            <Button label="Register" variant={mode === 'register' ? 'primary' : 'ghost'} onPress={() => switchMode('register')} />
-          </View>
+          <InkButton label={mode === 'login' ? '● log in' : 'log in'} onPress={() => switchMode('login')} />
+          <InkButton label={mode === 'register' ? '● register' : 'register'} onPress={() => switchMode('register')} />
         </View>
         <TextInput
           style={styles.input}
           placeholder="Email"
-          placeholderTextColor={colors.inkMuted}
+          placeholderTextColor={colors.inkFaded}
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
@@ -50,7 +43,7 @@ export function AuthScreen({
         <TextInput
           style={styles.input}
           placeholder="Password"
-          placeholderTextColor={colors.inkMuted}
+          placeholderTextColor={colors.inkFaded}
           secureTextEntry
           value={pw}
           onChangeText={setPw}
@@ -59,32 +52,38 @@ export function AuthScreen({
           <TextInput
             style={styles.input}
             placeholder="Confirm password"
-            placeholderTextColor={colors.inkMuted}
+            placeholderTextColor={colors.inkFaded}
             secureTextEntry
             value={confirm}
             onChangeText={setConfirm}
           />
         )}
-        {error && <Banner text={error} tone="danger" />}
-        <Button label={mode === 'login' ? 'Enter' : 'Create'} onPress={submit} />
-      </Card>
-      <Prose>A local sign-in for the demo — no data leaves your device.</Prose>
-    </Screen>
+        {error && (
+          <PaperNote tone="pink" tilt={-1}>
+            <NoteText>{error}</NoteText>
+          </PaperNote>
+        )}
+        <ChoiceLine text={mode === 'login' ? 'Open the book' : 'Begin a new book'} onPress={submit} />
+        <Text style={styles.hint}>A local sign-in for the demo — no data leaves your device.</Text>
+      </BookPage>
+    </Desk>
   );
 }
 
 const styles = StyleSheet.create({
-  brand: { alignItems: 'center', gap: space.xs },
-  tabs: { flexDirection: 'row', gap: space.sm },
-  tab: { flex: 1 },
+  brand: { ...type.prose, fontSize: 30, lineHeight: 38, fontFamily: 'CrimsonPro_600SemiBold', color: colors.ink, textAlign: 'center' },
+  sub: { ...type.handSmall, color: colors.inkFaded, textAlign: 'center' },
+  tabs: { flexDirection: 'row', justifyContent: 'center', gap: space.lg },
   input: {
-    backgroundColor: colors.bgRaised,
+    backgroundColor: '#fdf6e7',
     borderWidth: 1,
-    borderColor: colors.goldDim,
-    borderRadius: radii.sm,
+    borderColor: colors.pageEdge,
+    borderRadius: 4,
     paddingVertical: space.sm,
     paddingHorizontal: space.md,
-    color: colors.inkPrimary,
+    color: colors.ink,
     fontSize: 16,
+    fontFamily: 'CrimsonPro_400Regular',
   },
+  hint: { ...type.handSmall, color: colors.inkFaded, textAlign: 'center' },
 });

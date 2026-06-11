@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ShufferC Admin</title>
   <style>
-    :root { --bg:#0f1117; --card:#1a1d27; --fg:#e6e8ee; --muted:#8a90a2; --accent:#5b8cff; --ok:#3fb950; --warn:#d29922; --err:#f85149; --line:#2a2e3a; }
+    :root { --bg:#0e1015; --card:#171a23; --fg:#e8eaf0; --muted:#8d93a5; --accent:#6a96ff; --ok:#42b35c; --warn:#d9a73a; --err:#f2594b; --line:#272c39; --input:#0b0d12; }
     * { box-sizing: border-box; }
     html, body { height:100%; }
     body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); display:flex; flex-direction:column; }
@@ -51,6 +51,22 @@
     .pane pre { max-height:70vh; }
     .nodes-scroll { max-height:70vh; overflow:auto; padding-right:4px; }
     @media (max-width: 760px) { .split { flex-direction:column; } .split > .pane { flex-basis:auto; width:100%; } }
+
+    /* ── polish pass (book-ui-redesign) — visual only, no structural changes ── */
+    input, textarea, select { background: var(--input); transition: border-color .12s ease; }
+    input:focus, textarea:focus, select:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(106,150,255,.22);
+    }
+    button { transition: filter .12s ease, background .12s ease; }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    .card { border-radius: 12px; padding: 20px; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+    tbody tr:nth-child(even) { background: rgba(255,255,255,.02); }
+    tbody tr:hover { background: rgba(106,150,255,.06); }
+    .navbtn.active { box-shadow: inset 2px 0 0 var(--accent); }
+    .msg { padding: 6px 0; }
+    .pill { background: rgba(255,255,255,.03); }
   </style>
 </head>
 <body>

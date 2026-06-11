@@ -1,8 +1,11 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Screen, Prose, Card, Button, Tag, Heading, StatRow, Label } from '../components';
-import { space } from '../theme';
+import { View, Text, StyleSheet } from 'react-native';
+import {
+  Desk, BookPage, InkProse, ChoiceLine, PaperNote, NoteText, NoteRail, JournalEntryView,
+} from '../components';
+import { colors, space, type, tilts } from '../theme';
 import { useResponsive } from '../hooks/useResponsive';
+import { formatStats } from '../lib/format';
 import type { SessionView, ChoiceView } from '../services/api';
 
 export function Story({
@@ -17,75 +20,74 @@ export function Story({
   onShop: () => void;
 }) {
   const layout = useResponsive();
+  const save = view.save;
   const nodeHasCombat = !!view.node.combat;
-  const rep = view.save.reputation;
+  const chapter = save.playedRouteIds?.length ?? 1;
 
-  const rail = layout.showRail ? (
-    <View style={styles.rail}>
-      <Heading level="heading">{view.save.character.background}</Heading>
-      <StatRow stats={view.effectiveStats} />
-      <Label>Reputation — hero {rep.hero} · villain {rep.villain}</Label>
-    </View>
-  ) : null;
+  const notes = [
+    <PaperNote tone="yellow" tilt={tilts[0]} compact={!layout.showRail}>
+      <NoteText>HP {save.vitals.currentHp} ❤</NoteText>
+      <NoteText>{formatStats(view.effectiveStats)}</NoteText>
+    </PaperNote>,
+    <PaperNote tone="blue" tilt={tilts[1]} compact={!layout.showRail} onPress={busy ? undefined : onInventory}>
+      <NoteText>satchel — {save.character.inventory.length} items</NoteText>
+      <NoteText>{save.gold} gold · tap to open</NoteText>
+    </PaperNote>,
+    <PaperNote tone="pink" tilt={tilts[2]} compact={!layout.showRail}>
+      <NoteText>reputation</NoteText>
+      <NoteText>hero {save.reputation.hero} · villain {save.reputation.villain}</NoteText>
+    </PaperNote>,
+    ...(view.node.merchant ? [
+      <PaperNote tone="yellow" tilt={tilts[3]} compact={!layout.showRail} onPress={busy ? undefined : onShop}>
+        <NoteText>a merchant is here</NoteText>
+        <NoteText>tap to trade</NoteText>
+      </PaperNote>,
+    ] : []),
+  ];
 
-  const main = (
-    <View style={styles.main}>
-      <Prose>{view.node.prose}</Prose>
-
-      {lastChoice?.roll != null && (
-        <Tag
-          text={`Skill check · rolled ${lastChoice.roll} → ${lastChoice.checkPassed ? 'PASS' : 'FAIL'}`}
-          tone={lastChoice.checkPassed ? 'success' : 'danger'}
-        />
-      )}
-
-      {lastChoice?.reward && (
-        <Tag
-          text={`Spoils · +${lastChoice.reward.gold}g · +${lastChoice.reward.xp} xp${lastChoice.reward.itemIds.length ? ' · ' + lastChoice.reward.itemIds.join(', ') : ''}`}
-          tone="success"
-        />
-      )}
-
-      {view.node.choices.map((c) => {
-        const isFight = nodeHasCombat && !c.skillCheck;
-        const label = `${c.text}${c.skillCheck ? ` (${c.skillCheck.stat.toUpperCase()} check)` : ''}${isFight ? ' ⚔' : ''}`;
-        return (
-          <Button
-            key={c.id}
-            label={label}
-            variant={isFight ? 'danger' : 'ghost'}
-            disabled={busy}
-            onPress={() => (isFight ? onFight(c.id) : onChoose(c.id))}
-          />
-        );
-      })}
-
-      <Card onPress={busy ? undefined : onInventory}>
-        <Label>Inventory / Equipment</Label>
-      </Card>
-
-      {view.node.merchant && (
-        <Card onPress={busy ? undefined : onShop}>
-          <Label>Visit merchant</Label>
-        </Card>
-      )}
-    </View>
+  const page = (
+    <BookPage>
+      <Text style={styles.chapter}>{save.character.background} — chapter {chapter}</Text>
+      {view.journal.map((e, i) => <JournalEntryView key={i} entry={e} />)}
+      <InkProse animate>{view.node.prose}</InkProse>
+      <View style={styles.choices}>
+        {view.node.choices.map((c) => {
+          const isFight = nodeHasCombat && !c.skillCheck;
+          const label = `${c.text}${c.skillCheck ? ` (${c.skillCheck.stat.toUpperCase()} check)` : ''}${isFight ? ' ⚔' : ''}`;
+          return (
+            <ChoiceLine
+              key={c.id}
+              text={label}
+              tone={isFight ? 'danger' : 'default'}
+              disabled={busy}
+              onPress={() => (isFight ? onFight(c.id) : onChoose(c.id))}
+            />
+          );
+        })}
+      </View>
+    </BookPage>
   );
 
   return (
-    <Screen>
-      {rail ? (
+    <Desk scrollToEndKey={save.currentNodeId} maxWidth={layout.showRail ? 1020 : 760}>
+      {layout.showRail ? (
         <View style={styles.split}>
-          {main}
-          {rail}
+          <View style={styles.main}>{page}</View>
+          <NoteRail notes={notes} />
         </View>
-      ) : main}
-    </Screen>
+      ) : (
+        <>
+          <NoteRail notes={notes} horizontal />
+          {page}
+        </>
+      )}
+    </Desk>
   );
 }
 
 const styles = StyleSheet.create({
   split: { flexDirection: 'row', gap: space.lg },
-  main: { flex: 1, gap: space.md },
-  rail: { width: 240, gap: space.sm },
+  main: { flex: 1 },
+  chapter: { ...type.chapter, color: colors.inkFaded, textTransform: 'uppercase' },
+  choices: { marginTop: space.md },
 });

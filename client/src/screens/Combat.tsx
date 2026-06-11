@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Screen, Heading, Card, Button, Tag } from '../components';
-import { colors, space } from '../theme';
+import { Desk, BookPage, InkProse, ChoiceLine, InkStamp } from '../components';
+import { colors, space, type } from '../theme';
 import { sprite } from '../assets';
 import type { SessionView, ChoiceView } from '../services/api';
 
@@ -40,44 +40,50 @@ export function Combat({
 
   if (log.length === 0) {
     return (
-      <Screen>
-        <Heading level="title">Arrange skill priority</Heading>
-        {priority.map((id, i) => (
-          <Card key={id}>
-            <View style={styles.row}>
+      <Desk center>
+        <BookPage>
+          <Text style={styles.chapter}>before the battle</Text>
+          <InkProse>You ready yourself, deciding which skill to lead with.</InkProse>
+          {priority.map((id, i) => (
+            <View key={id} style={styles.row}>
               <Text style={styles.skill}>{i + 1}. {id}</Text>
               <Pressable disabled={busy} onPress={() => move(i, -1)}><Text style={styles.arrow}>▲</Text></Pressable>
               <Pressable disabled={busy} onPress={() => move(i, 1)}><Text style={styles.arrow}>▼</Text></Pressable>
             </View>
-          </Card>
-        ))}
-        <Button label="Engage ⚔" variant="danger" busy={busy} onPress={() => onFight(priority)} />
-      </Screen>
+          ))}
+          <ChoiceLine text="Engage ⚔" tone="danger" disabled={busy} onPress={() => onFight(priority)} />
+        </BookPage>
+      </Desk>
     );
   }
 
   return (
-    <Screen>
-      <View style={styles.battleHead}>
-        <Heading level="title">Battle</Heading>
-        <Tag text={`Winner: ${lastChoice?.combat?.winner}`} tone="gold" />
-      </View>
-      {log.slice(0, shown).map((e, i) => (
-        <Text key={i} style={styles.event}>
-          R{e.round} {e.actorId} {e.type}
-          {e.skillId ? ` ${sprite('skill.' + e.skillId)} ${e.skillId}` : ''}
-          {e.damage ? ` → ${e.damage} dmg` : ''}
-          {e.note ? ` (${e.note})` : ''}
-        </Text>
-      ))}
-    </Screen>
+    <Desk scrollToEndKey={shown}>
+      <BookPage>
+        <Text style={styles.chapter}>the battle</Text>
+        {log.slice(0, shown).map((e, i) => (
+          <Text key={i} style={styles.event}>
+            R{e.round} {e.actorId} {e.type}
+            {e.skillId ? ` ${sprite('skill.' + e.skillId)} ${e.skillId}` : ''}
+            {e.damage ? ` → ${e.damage} dmg` : ''}
+            {e.note ? ` (${e.note})` : ''}
+          </Text>
+        ))}
+        {shown >= log.length && (
+          <InkStamp
+            text={`winner: ${lastChoice?.combat?.winner}`}
+            tone={lastChoice?.combat?.winner === 'player' ? 'green' : 'red'}
+          />
+        )}
+      </BookPage>
+    </Desk>
   );
 }
 
 const styles = StyleSheet.create({
+  chapter: { ...type.chapter, color: colors.inkFaded, textTransform: 'uppercase' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  skill: { fontSize: 16, flex: 1, color: colors.inkPrimary },
-  arrow: { fontSize: 18, paddingHorizontal: space.sm, color: colors.gold },
-  battleHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  event: { fontVariant: ['tabular-nums'], fontSize: 14, color: colors.inkPrimary },
+  skill: { ...type.hand, flex: 1, color: colors.ink },
+  arrow: { fontSize: 18, paddingHorizontal: space.sm, color: colors.inkAccent },
+  event: { ...type.handSmall, color: colors.ink },
 });

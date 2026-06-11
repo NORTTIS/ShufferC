@@ -45,7 +45,7 @@ describe('resolveChoice', () => {
     expect(next.character.inventory).toEqual(['key']);
     expect(next.reputation.villain).toBe(1);
     expect(next.currentNodeId).toBe('n3');
-    expect(next.choiceLog).toEqual([{ nodeId: 'n1', choiceId: 'steal' }]);
+    expect(next.choiceLog).toEqual([{ nodeId: 'n1', choiceId: 'steal', routeId: 'r1' }]);
   });
 
   it('applies faction + hero reputation and flags', () => {
