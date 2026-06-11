@@ -20,6 +20,8 @@ export function deserialize(json: string): SaveState {
     xp: data.xp ?? 0,
     level: data.level ?? 1,
     consumables: data.consumables ?? {},
+    // Pre-v4 entries intentionally keep no routeId: buildJournal treats them
+    // as belonging to the current route, which is correct for single-route saves.
     choiceLog: data.choiceLog ?? [],
     vitals: data.vitals ?? { currentHp: BASE_HP + con * HP_PER_CON, pendingBuffs: [] as StatusEffect[] },
   };
