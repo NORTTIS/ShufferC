@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { CrimsonPro_400Regular, CrimsonPro_600SemiBold } from '@expo-google-fonts/crimson-pro';
@@ -13,8 +13,8 @@ import { Combat } from './src/screens/Combat';
 import { Inventory } from './src/screens/Inventory';
 import { Shop } from './src/screens/Shop';
 import { Ending } from './src/screens/Ending';
-import { Screen, Heading, Button, Banner } from './src/components';
-import { colors, space } from './src/theme';
+import { Desk, PaperNote, NoteText } from './src/components';
+import { colors, space, type } from './src/theme';
 
 const APP_TITLE = 'ShufferC';
 
@@ -27,12 +27,12 @@ export default function App() {
 
   if (auth.status === 'loading' || (!fontsLoaded && !fontError)) {
     return (
-      <Screen center scroll={false}>
+      <Desk center>
         <View style={styles.splash}>
-          <Heading level="display">{APP_TITLE}</Heading>
-          <ActivityIndicator color={colors.gold} />
+          <Text style={styles.splashTitle}>{APP_TITLE}</Text>
+          <ActivityIndicator color={colors.page} />
         </View>
-      </Screen>
+      </Desk>
     );
   }
 
@@ -49,13 +49,14 @@ export default function App() {
     <View style={styles.root}>
       <StatusBar style="light" />
       <View style={styles.header}>
-        <Heading level="heading">{APP_TITLE}</Heading>
-        <Button label="Log out" variant="ghost" onPress={auth.logout} />
+        <Text style={styles.headerTitle}>{APP_TITLE}</Text>
+        <Pressable onPress={auth.logout}><Text style={styles.logout}>close the book ✕</Text></Pressable>
       </View>
-      <View style={styles.headerRule} />
       {state.error && (
         <View style={styles.bannerWrap}>
-          <Banner text={state.error} tone="danger" />
+          <PaperNote tone="pink" tilt={-1}>
+            <NoteText>{state.error}</NoteText>
+          </PaperNote>
         </View>
       )}
 
@@ -108,10 +109,16 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bgBase, paddingTop: 24 },
+  root: { flex: 1, backgroundColor: colors.deskWood, paddingTop: 24 },
   splash: { alignItems: 'center', gap: space.lg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.lg, paddingVertical: space.sm },
-  headerRule: { height: 1, backgroundColor: colors.goldDim, marginHorizontal: space.lg },
-  bannerWrap: { paddingHorizontal: space.lg, paddingTop: space.sm },
+  splashTitle: { fontSize: 30, fontFamily: 'CrimsonPro_600SemiBold', color: colors.page },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: space.lg, paddingVertical: space.sm,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(244,234,214,0.15)',
+  },
+  headerTitle: { fontSize: 20, fontFamily: 'CrimsonPro_600SemiBold', color: colors.page },
+  logout: { ...type.handSmall, color: colors.pageEdge },
+  bannerWrap: { paddingHorizontal: space.lg, paddingTop: space.sm, alignItems: 'flex-start' },
   body: { flex: 1 },
 });
