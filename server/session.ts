@@ -78,7 +78,7 @@ export interface UseView { save: SaveState; effectiveStats: Stats }
 
 export interface GameSession {
   listBackgrounds(): Background[];
-  newGame(backgroundId: string, routeId?: string): Promise<SessionView & { sessionId: string }>;
+  newGame(userId: string, backgroundId: string, routeId?: string): Promise<SessionView & { sessionId: string }>;
   getView(id: string): Promise<SessionView>;
   continueToNextRoute(id: string): Promise<SessionView>;
   applyChoice(id: string, choiceId: string, skillPriority?: string[]): Promise<ChoiceView>;
@@ -219,7 +219,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
       return Object.values(deps.backgrounds);
     },
 
-    async newGame(backgroundId: string, routeId?: string) {
+    async newGame(userId: string, backgroundId: string, routeId?: string) {
       const reg = await loadRegistries();
       const bg = deps.backgrounds[backgroundId];
       if (!bg) throw new GameError(`Unknown background ${backgroundId}`, 400);
@@ -260,7 +260,7 @@ export function createGameSession(store: SaveStore, deps: SessionDeps = DEFAULT_
         vitals: { currentHp: startHp, pendingBuffs: [] },
         playedRouteIds: [bundle.route.id],
       };
-      const sessionId = await store.create(save);
+      const sessionId = await store.create(save, userId);
       await enrich(sessionId, save, bundle);
       return { sessionId, ...view(save, bundle, reg.itemDb) };
     },

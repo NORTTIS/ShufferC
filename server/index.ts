@@ -57,7 +57,7 @@ const playerAuth = config.supabase.url && config.supabase.anonKey
     novels,
     embeddings,
     embedder,
-  }, { auth: playerAuth });
+  }, { auth: playerAuth, saves });
 
   app.listen(config.port, () => {
     console.log(`ShufferC server listening on http://localhost:${config.port}`);

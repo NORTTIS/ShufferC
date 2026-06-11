@@ -22,7 +22,8 @@ function app(
   const routes = createMemoryRouteStore([structuredClone(SAMPLE_BUNDLE)]);
   const { novels, embeddings } = createMemoryNovelStore();
   const content = createMemoryContentStores();
-  const session = createGameSession(createMemoryStore(), {
+  const saves = createMemoryStore();
+  const session = createGameSession(saves, {
     backgrounds: BACKGROUNDS, content,
     routes, provider, embedder, embeddings,
   });
@@ -31,7 +32,7 @@ function app(
     content,
     auth: createAuth(ADMIN),
     novels, embeddings, embedder,
-  }, { auth: createMemoryPlayerAuth() });
+  }, { auth: createMemoryPlayerAuth(), saves });
 }
 
 async function token(a: ReturnType<typeof app>): Promise<string> {
@@ -41,6 +42,7 @@ async function token(a: ReturnType<typeof app>): Promise<string> {
 
 async function playerToken(a: ReturnType<typeof app>): Promise<string> {
   const res = await request(a).post('/auth/register').send(PLAYER);
+  expect(res.status).toBe(200);
   return res.body.token as string;
 }
 
@@ -403,8 +405,45 @@ describe('Player auth', () => {
 
   it('game endpoints require a player token', async () => {
     const a = app();
-    expect((await request(a).post('/sessions').send({ backgroundId: 'rogue' })).status).toBe(401);
-    expect((await request(a).get('/sessions/some-id')).status).toBe(401);
+    const routes: Array<[method: 'get' | 'post', path: string]> = [
+      ['post', '/sessions'],
+      ['get', '/sessions/some-id'],
+      ['post', '/sessions/some-id/choice'],
+      ['post', '/sessions/some-id/continue'],
+      ['post', '/sessions/some-id/equip'],
+      ['get', '/sessions/some-id/shop'],
+      ['post', '/sessions/some-id/buy'],
+      ['post', '/sessions/some-id/use'],
+      ['get', '/saves'],
+    ];
+    for (const [method, path] of routes) {
+      expect((await request(a)[method](path)).status).toBe(401);
+    }
     expect((await request(a).get('/backgrounds')).status).toBe(200); // stays public
+  });
+
+  it("a player cannot access another player's session (404)", async () => {
+    const a = app();
+    const t1 = await playerToken(a);
+    const reg2 = await request(a).post('/auth/register').send({ email: 'other@test.co', password: 'secret1' });
+    const t2 = reg2.body.token as string;
+    const created = await request(a).post('/sessions').set('Authorization', `Bearer ${t1}`).send({ backgroundId: 'rogue' });
+    const id = created.body.sessionId as string;
+    expect((await request(a).get(`/sessions/${id}`).set('Authorization', `Bearer ${t2}`)).status).toBe(404);
+    expect((await request(a).get(`/sessions/${id}`).set('Authorization', `Bearer ${t1}`)).status).toBe(200);
+  });
+
+  it('GET /saves lists only my saves, newest first', async () => {
+    const a = app();
+    const t1 = await playerToken(a);
+    const reg2 = await request(a).post('/auth/register').send({ email: 'other@test.co', password: 'secret1' });
+    const t2 = reg2.body.token as string;
+    const mine = await request(a).post('/sessions').set('Authorization', `Bearer ${t1}`).send({ backgroundId: 'rogue' });
+    await request(a).post('/sessions').set('Authorization', `Bearer ${t2}`).send({ backgroundId: 'mage' });
+    const res = await request(a).get('/saves').set('Authorization', `Bearer ${t1}`);
+    expect(res.status).toBe(200);
+    expect(res.body.map((s: { id: string }) => s.id)).toEqual([mine.body.sessionId]);
+    expect(res.body[0].routeId).toBeDefined();
+    expect(typeof res.body[0].updatedAt).toBe('string');
   });
 });

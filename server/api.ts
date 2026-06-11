@@ -14,6 +14,7 @@ import { retrieveContext } from './rag/retrieve';
 import { ContentStores } from './store/contentStores';
 import { registerContentRoutes } from './api/contentRoutes';
 import { PlayerAuthStore } from './playerAuth/PlayerAuthStore';
+import { SaveStore } from './store/SaveStore';
 
 type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
 
@@ -29,6 +30,7 @@ export interface AdminDeps {
 
 export interface PlayerDeps {
   auth: PlayerAuthStore;
+  saves: SaveStore;
 }
 
 interface PlayerRequest extends Request {
@@ -42,7 +44,7 @@ function parseCredentials(body: unknown): { email: string; password: string } {
   if (!parsed.success) {
     throw new GameError('Valid email and a password of at least 6 characters are required', 400);
   }
-  return { email: parsed.data.email.toLowerCase(), password: parsed.data.password };
+  return { email: parsed.data.email.trim().toLowerCase(), password: parsed.data.password };
 }
 
 /** Express middleware factory: requires a valid player Bearer token. */
@@ -53,6 +55,21 @@ function requirePlayer(auth: PlayerAuthStore) {
     if (!token) return next(new GameError('Unauthorized', 401));
     try {
       (req as PlayerRequest).player = await auth.verifyToken(token);
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+/** Requires that req.params.id is a save owned by the authenticated player. 404 otherwise (don't reveal existence). */
+function requireOwner(saves: SaveStore) {
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    try {
+      const owner = await saves.owner(req.params.id as string);
+      if (!owner || owner !== (req as PlayerRequest).player?.id) {
+        return next(new GameError(`Session ${req.params.id} not found`, 404));
+      }
       next();
     } catch (err) {
       next(err);
@@ -128,33 +145,40 @@ export function createApp(session: GameSession, admin: AdminDeps, player: Player
   }));
 
   const playerOnly = requirePlayer(player.auth);
+  const ownedSession = [playerOnly, requireOwner(player.saves)];
 
   // ── Player ──────────────────────────────────────────────────────────
   app.get('/backgrounds', wrap(() => session.listBackgrounds()));
 
-  app.post('/sessions', playerOnly, wrap((req) => session.newGame(req.body?.backgroundId, req.body?.routeId)));
+  app.post('/sessions', playerOnly, wrap((req) =>
+    session.newGame((req as PlayerRequest).player!.id, req.body?.backgroundId, req.body?.routeId),
+  ));
 
-  app.get('/sessions/:id', playerOnly, wrap((req) => session.getView(req.params.id as string)));
+  app.get('/saves', playerOnly, wrap((req) =>
+    player.saves.listByUser((req as PlayerRequest).player!.id),
+  ));
 
-  app.post('/sessions/:id/choice', playerOnly, wrap((req) =>
+  app.get('/sessions/:id', ownedSession, wrap((req) => session.getView(req.params.id as string)));
+
+  app.post('/sessions/:id/choice', ownedSession, wrap((req) =>
     session.applyChoice(req.params.id as string, req.body?.choiceId, req.body?.skillPriority),
   ));
 
-  app.post('/sessions/:id/continue', playerOnly, wrap((req) =>
+  app.post('/sessions/:id/continue', ownedSession, wrap((req) =>
     session.continueToNextRoute(req.params.id as string),
   ));
 
-  app.post('/sessions/:id/equip', playerOnly, wrap((req) =>
+  app.post('/sessions/:id/equip', ownedSession, wrap((req) =>
     session.equip(req.params.id as string, req.body?.slot, req.body?.itemId ?? null),
   ));
 
-  app.get('/sessions/:id/shop', playerOnly, wrap((req) => session.getShop(req.params.id as string)));
+  app.get('/sessions/:id/shop', ownedSession, wrap((req) => session.getShop(req.params.id as string)));
 
-  app.post('/sessions/:id/buy', playerOnly, wrap((req) =>
+  app.post('/sessions/:id/buy', ownedSession, wrap((req) =>
     session.buy(req.params.id as string, req.body?.itemId),
   ));
 
-  app.post('/sessions/:id/use', playerOnly, wrap((req) =>
+  app.post('/sessions/:id/use', ownedSession, wrap((req) =>
     session.useItem(req.params.id as string, req.body?.itemId),
   ));
 
