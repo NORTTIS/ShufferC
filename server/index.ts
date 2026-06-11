@@ -12,6 +12,8 @@ import { createMemoryNovelStore } from './rag/novelStore';
 import { createPgNovelStore } from './rag/pgNovelStore';
 import { createDb } from './db/client';
 import { createAuth } from './auth';
+import { createMemoryPlayerAuth } from './playerAuth/memoryPlayerAuth';
+import { createSupabasePlayerAuth } from './playerAuth/supabasePlayerAuth';
 import { BACKGROUNDS } from '../shared/backgrounds';
 import { SAMPLE_BUNDLE } from '../shared/fixtures';
 import { config } from './config';
@@ -30,6 +32,14 @@ const provider = config.gemini.apiKey
 
 const embedder = createGeminiEmbedder(config.gemini); // available:false without a key → RAG endpoints report 503
 
+const playerAuth = config.supabase.url && config.supabase.anonKey
+  ? createSupabasePlayerAuth({
+      url: config.supabase.url,
+      anonKey: config.supabase.anonKey,
+      jwtSecret: config.supabase.jwtSecret,
+    })
+  : createMemoryPlayerAuth(); // no Supabase env → in-memory accounts (dev only, lost on restart)
+
 (async () => {
   const content = db ? createPgContentStores(db) : createMemoryContentStores();
   if (db) await seedContentStores(content);
@@ -47,11 +57,11 @@ const embedder = createGeminiEmbedder(config.gemini); // available:false without
     novels,
     embeddings,
     embedder,
-  });
+  }, { auth: playerAuth });
 
   app.listen(config.port, () => {
     console.log(`ShufferC server listening on http://localhost:${config.port}`);
     console.log(`Admin console: http://localhost:${config.port}/admin`);
-    console.log(`AI provider available: ${provider.available} · embedder available: ${embedder.available} · db: ${db ? 'postgres' : 'memory'}`);
+    console.log(`AI provider available: ${provider.available} · embedder available: ${embedder.available} · db: ${db ? 'postgres' : 'memory'} · player auth: ${config.supabase.url ? 'supabase' : 'memory'}`);
   });
 })();

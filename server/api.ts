@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction, Express } from 'express';
 import path from 'path';
+import { z } from 'zod';
 import { GameSession, GameError } from './session';
 import { AIProvider } from './ai/provider';
 import { RouteStore } from './store/RouteStore';
@@ -12,6 +13,7 @@ import { ingestNovel } from './rag/ingest';
 import { retrieveContext } from './rag/retrieve';
 import { ContentStores } from './store/contentStores';
 import { registerContentRoutes } from './api/contentRoutes';
+import { PlayerAuthStore } from './playerAuth/PlayerAuthStore';
 
 type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
 
@@ -23,6 +25,39 @@ export interface AdminDeps {
   novels: NovelStore;
   embeddings: EmbeddingStore;
   embedder: EmbeddingProvider;
+}
+
+export interface PlayerDeps {
+  auth: PlayerAuthStore;
+}
+
+interface PlayerRequest extends Request {
+  player?: { id: string; email: string };
+}
+
+const credentials = z.object({ email: z.email(), password: z.string().min(6) });
+
+function parseCredentials(body: unknown): { email: string; password: string } {
+  const parsed = credentials.safeParse(body);
+  if (!parsed.success) {
+    throw new GameError('Valid email and a password of at least 6 characters are required', 400);
+  }
+  return { email: parsed.data.email.toLowerCase(), password: parsed.data.password };
+}
+
+/** Express middleware factory: requires a valid player Bearer token. */
+function requirePlayer(auth: PlayerAuthStore) {
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    const header = req.headers.authorization ?? '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+    if (!token) return next(new GameError('Unauthorized', 401));
+    try {
+      (req as PlayerRequest).player = await auth.verifyToken(token);
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
 }
 
 function wrap(handler: Handler) {
@@ -46,7 +81,7 @@ function requireAuth(auth: Auth) {
   };
 }
 
-export function createApp(session: GameSession, admin: AdminDeps): Express {
+export function createApp(session: GameSession, admin: AdminDeps, player: PlayerDeps): Express {
   const app = express();
 
   // CORS: the Expo web client runs on a different origin (e.g. :8081) than the
@@ -73,32 +108,53 @@ export function createApp(session: GameSession, admin: AdminDeps): Express {
     return { token: tokenValue };
   }));
 
+  // ── Player auth (no token required) ───────────────────────────────────
+  app.post('/auth/register', wrap((req) => {
+    const { email, password } = parseCredentials(req.body);
+    return player.auth.register(email, password);
+  }));
+
+  app.post('/auth/login', wrap((req) => {
+    const { email, password } = parseCredentials(req.body);
+    return player.auth.login(email, password);
+  }));
+
+  app.post('/auth/refresh', wrap((req) => {
+    const refreshToken = req.body?.refreshToken;
+    if (typeof refreshToken !== 'string' || refreshToken === '') {
+      throw new GameError('refreshToken is required', 400);
+    }
+    return player.auth.refresh(refreshToken);
+  }));
+
+  const playerOnly = requirePlayer(player.auth);
+
   // ── Player ──────────────────────────────────────────────────────────
   app.get('/backgrounds', wrap(() => session.listBackgrounds()));
 
-  app.post('/sessions', wrap((req) => session.newGame(req.body?.backgroundId, req.body?.routeId)));
+  app.post('/sessions', playerOnly, wrap((req) => session.newGame(req.body?.backgroundId, req.body?.routeId)));
 
-  app.get('/sessions/:id', wrap((req) => session.getView(req.params.id as string)));
+  app.get('/sessions/:id', playerOnly, wrap((req) => session.getView(req.params.id as string)));
 
-  app.post('/sessions/:id/choice', wrap((req) =>
+  app.post('/sessions/:id/choice', playerOnly, wrap((req) =>
     session.applyChoice(req.params.id as string, req.body?.choiceId, req.body?.skillPriority),
   ));
 
-  app.post('/sessions/:id/continue', wrap((req) =>
+  app.post('/sessions/:id/continue', playerOnly, wrap((req) =>
     session.continueToNextRoute(req.params.id as string),
   ));
 
-  app.post('/sessions/:id/equip', wrap((req) =>
+  app.post('/sessions/:id/equip', playerOnly, wrap((req) =>
     session.equip(req.params.id as string, req.body?.slot, req.body?.itemId ?? null),
   ));
 
-  app.get('/sessions/:id/shop', wrap((req) => session.getShop(req.params.id as string)));
+  app.get('/sessions/:id/shop', playerOnly, wrap((req) => session.getShop(req.params.id as string)));
 
-  app.post('/sessions/:id/buy', wrap((req) =>
+  app.post('/sessions/:id/buy', playerOnly, wrap((req) =>
     session.buy(req.params.id as string, req.body?.itemId),
   ));
 
-  app.post('/sessions/:id/use', wrap((req) =>
+  app.post('/sessions/:id/use', playerOnly, wrap((req) =>
     session.useItem(req.params.id as string, req.body?.itemId),
   ));
 

@@ -9,6 +9,7 @@ import { createFakeProvider } from './ai/provider';
 import { createFakeEmbedder } from './rag/embeddingProvider';
 import { createMemoryNovelStore } from './rag/novelStore';
 import { createAuth } from './auth';
+import { createMemoryPlayerAuth } from './playerAuth/memoryPlayerAuth';
 import { ITEM_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
 import { BACKGROUNDS } from '../shared/backgrounds';
 
@@ -20,7 +21,7 @@ function adminApp() {
   const provider = createFakeProvider([]);
   const embedder = createFakeEmbedder();
   const session = createGameSession(createMemoryStore(), { backgrounds: BACKGROUNDS, content, routes, provider, embedder, embeddings });
-  return createApp(session, { provider, routes, content, auth: createAuth(ADMIN), novels, embeddings, embedder });
+  return createApp(session, { provider, routes, content, auth: createAuth(ADMIN), novels, embeddings, embedder }, { auth: createMemoryPlayerAuth() });
 }
 
 describe('server e2e (hardcoded route)', () => {
