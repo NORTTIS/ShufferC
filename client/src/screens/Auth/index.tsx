@@ -7,18 +7,23 @@ import type { AuthResult } from '../../auth/authCore';
 export function AuthScreen({
   onLogin, onRegister,
 }: {
-  onLogin: (email: string, pw: string) => AuthResult;
-  onRegister: (email: string, pw: string, confirm: string) => AuthResult;
+  onLogin: (email: string, pw: string) => Promise<AuthResult>;
+  onRegister: (email: string, pw: string, confirm: string) => Promise<AuthResult>;
 }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const switchMode = (m: 'login' | 'register') => { setMode(m); setError(null); };
-  const submit = () => {
-    const res = mode === 'login' ? onLogin(email, pw) : onRegister(email, pw, confirm);
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const res = mode === 'login' ? await onLogin(email, pw) : await onRegister(email, pw, confirm);
+    setBusy(false);
     if (!res.ok) setError(res.error);
   };
 
@@ -63,8 +68,12 @@ export function AuthScreen({
             <NoteText>{error}</NoteText>
           </PaperNote>
         )}
-        <ChoiceLine text={mode === 'login' ? 'Open the book' : 'Begin a new book'} onPress={submit} />
-        <Text style={styles.hint}>A local sign-in for the demo — no data leaves your device.</Text>
+        <ChoiceLine
+          text={busy ? 'opening…' : mode === 'login' ? 'Open the book' : 'Begin a new book'}
+          disabled={busy}
+          onPress={submit}
+        />
+        <Text style={styles.hint}>Your account and saves live on the server — log in anywhere.</Text>
       </BookPage>
     </Desk>
   );
