@@ -57,4 +57,14 @@ describe('memoryStore', () => {
     expect(typeof mine[0].updatedAt).toBe('string');
     expect((await store.listByUser('u2')).map((s) => s.id)).toEqual([b]);
   });
+
+  it('listByUser returns newest first', async () => {
+    const store = createMemoryStore();
+    const a = await store.create(SAVE_FIXTURE, 'u1');
+    await new Promise((r) => setTimeout(r, 2));
+    const b = await store.create(SAVE_FIXTURE, 'u1');
+    await new Promise((r) => setTimeout(r, 2));
+    await store.put(a, SAVE_FIXTURE);                       // touching a makes it newest
+    expect((await store.listByUser('u1')).map((s) => s.id)).toEqual([a, b]);
+  });
 });

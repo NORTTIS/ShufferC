@@ -433,6 +433,28 @@ describe('Player auth', () => {
     expect((await request(a).get(`/sessions/${id}`).set('Authorization', `Bearer ${t1}`)).status).toBe(200);
   });
 
+  it("every owned route 404s for another player's token", async () => {
+    const a = app();
+    const t1 = await playerToken(a);
+    const reg2 = await request(a).post('/auth/register').send({ email: 'other@test.co', password: 'secret1' });
+    const t2 = reg2.body.token as string;
+    const created = await request(a).post('/sessions').set('Authorization', `Bearer ${t1}`).send({ backgroundId: 'rogue' });
+    const id = created.body.sessionId as string;
+    const routes: Array<[method: 'get' | 'post', path: string]> = [
+      ['get', `/sessions/${id}`],
+      ['post', `/sessions/${id}/choice`],
+      ['post', `/sessions/${id}/continue`],
+      ['post', `/sessions/${id}/equip`],
+      ['get', `/sessions/${id}/shop`],
+      ['post', `/sessions/${id}/buy`],
+      ['post', `/sessions/${id}/use`],
+    ];
+    for (const [method, path] of routes) {
+      const res = await request(a)[method](path).set('Authorization', `Bearer ${t2}`);
+      expect({ path, status: res.status }).toEqual({ path, status: 404 });
+    }
+  });
+
   it('GET /saves lists only my saves, newest first', async () => {
     const a = app();
     const t1 = await playerToken(a);
