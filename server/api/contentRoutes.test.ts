@@ -8,6 +8,7 @@ import { createFakeProvider } from '../ai/provider';
 import { createFakeEmbedder } from '../rag/embeddingProvider';
 import { createMemoryNovelStore } from '../rag/novelStore';
 import { createAuth } from '../auth';
+import { createMemoryPlayerAuth } from '../playerAuth/memoryPlayerAuth';
 import { BACKGROUNDS } from '../../shared/backgrounds';
 import { SAMPLE_BUNDLE } from '../../shared/fixtures';
 
@@ -17,8 +18,9 @@ function app() {
   const content = createMemoryContentStores();
   const { novels, embeddings } = createMemoryNovelStore();
   const provider = createFakeProvider([]); const embedder = createFakeEmbedder();
-  const session = createGameSession(createMemoryStore(), { backgrounds: BACKGROUNDS, content, routes, provider, embedder, embeddings });
-  return createApp(session, { provider, routes, content, auth: createAuth(ADMIN), novels, embeddings, embedder });
+  const saves = createMemoryStore();
+  const session = createGameSession(saves, { backgrounds: BACKGROUNDS, content, routes, provider, embedder, embeddings });
+  return createApp(session, { provider, routes, content, auth: createAuth(ADMIN), novels, embeddings, embedder }, { auth: createMemoryPlayerAuth(), saves });
 }
 const token = async (a: ReturnType<typeof app>) => (await request(a).post('/admin/login').send(ADMIN)).body.token as string;
 const auth = (t: string) => ({ Authorization: `Bearer ${t}` });

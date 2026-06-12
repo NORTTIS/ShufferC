@@ -61,6 +61,12 @@ export function useGameSession() {
     return { view: res, lastChoice: res, screen: screenAfter(res) };
   }), [run, state.sessionId]);
 
+  // Resume a save from GET /saves: load its view and route to the right screen.
+  const resume = useCallback((saveId: string) => run(async () => {
+    const res = await gameApi.getView(saveId);
+    return { sessionId: saveId, view: res, lastChoice: null, screen: screenAfter(res) };
+  }), [run]);
+
   // Called when the player selects a fight choice — route to Combat to arrange priority.
   const enterCombat = useCallback((choiceId: string) => {
     setState((s) => ({ ...s, pendingFightChoiceId: choiceId, screen: 'combat' }));
@@ -109,5 +115,5 @@ export function useGameSession() {
     setState((s) => ({ ...s, screen }));
   }, []);
 
-  return { state, start, choose, enterCombat, fight, equip, buy, useItem, openShop, goTo, continueRoute };
+  return { state, start, resume, choose, enterCombat, fight, equip, buy, useItem, openShop, goTo, continueRoute };
 }

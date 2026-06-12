@@ -14,7 +14,7 @@ function newSession() {
 describe('GameSession.newGame', () => {
   it('builds a save from the chosen background and returns the start node', async () => {
     const s = newSession();
-    const res = await s.newGame('rogue');
+    const res = await s.newGame('u-test', 'rogue');
     expect(typeof res.sessionId).toBe('string');
     expect(res.save.character.background).toBe('rogue');
     expect(res.save.character.baseStats.dex).toBe(10); // rogue preset
@@ -25,14 +25,14 @@ describe('GameSession.newGame', () => {
 
   it('throws GameError(400) on an unknown background', async () => {
     const s = newSession();
-    await expect(s.newGame('wizardlord')).rejects.toMatchObject({ status: 400 });
+    await expect(s.newGame('u-test', 'wizardlord')).rejects.toMatchObject({ status: 400 });
   });
 });
 
 describe('GameSession.getView', () => {
   it('returns the current node + effective stats', async () => {
     const s = newSession();
-    const { sessionId } = await s.newGame('fighter');
+    const { sessionId } = await s.newGame('u-test', 'fighter');
     const view = await s.getView(sessionId);
     expect(view.node.id).toBe('n1');
     expect(view.effectiveStats.con).toBe(11); // fighter con 9 + ring 2
@@ -47,7 +47,7 @@ describe('GameSession.getView', () => {
 describe('GameSession.equip', () => {
   it('equipping an item raises effective stats; unequipping restores them', async () => {
     const s = newSession();
-    const { sessionId } = await s.newGame('rogue'); // dagger equipped, +2 str
+    const { sessionId } = await s.newGame('u-test', 'rogue'); // dagger equipped, +2 str
     const before = await s.getView(sessionId);
     expect(before.effectiveStats.str).toBe(9);
 
@@ -60,13 +60,13 @@ describe('GameSession.equip', () => {
 
   it('throws GameError(400) when equipping an item not in inventory', async () => {
     const s = newSession();
-    const { sessionId } = await s.newGame('rogue');
+    const { sessionId } = await s.newGame('u-test', 'rogue');
     await expect(s.equip(sessionId, 'ring', 'ringOfRegen')).rejects.toMatchObject({ status: 400 });
   });
 
   it('throws GameError(400) when item slot does not match the target slot', async () => {
     const s = newSession();
-    const { sessionId } = await s.newGame('rogue');
+    const { sessionId } = await s.newGame('u-test', 'rogue');
     await expect(s.equip(sessionId, 'ring', 'dagger')).rejects.toMatchObject({ status: 400 });
   });
 
@@ -82,7 +82,7 @@ describe('GameSession.listBackgrounds', () => {
 describe('GameSession.applyChoice', () => {
   it('sneak path: runs the skill check, applies outcome, advances to n3', async () => {
     const s = newSession();
-    const { sessionId } = await s.newGame('rogue');
+    const { sessionId } = await s.newGame('u-test', 'rogue');
     const res = await s.applyChoice(sessionId, 'sneak');
     expect(typeof res.roll).toBe('number');
     expect(typeof res.checkPassed).toBe('boolean');
@@ -94,7 +94,7 @@ describe('GameSession.applyChoice', () => {
 
   it('fight path: a strong fighter beats the goblin and advances to n2', async () => {
     const s = newSession();
-    const { sessionId } = await s.newGame('fighter');
+    const { sessionId } = await s.newGame('u-test', 'fighter');
     const res = await s.applyChoice(sessionId, 'fight', ['slash']);
     expect(res.combat).toBeDefined();
     expect(res.combat!.winner).toBe('player');
@@ -104,15 +104,15 @@ describe('GameSession.applyChoice', () => {
 
   it('fight path requires skillPriority (else 400)', async () => {
     const s = newSession();
-    const { sessionId } = await s.newGame('fighter');
+    const { sessionId } = await s.newGame('u-test', 'fighter');
     await expect(s.applyChoice(sessionId, 'fight')).rejects.toMatchObject({ status: 400 });
   });
 
   it('fight is deterministic: same seed yields the same combat log', async () => {
     const a = newSession();
     const b = newSession();
-    const ida = (await a.newGame('fighter')).sessionId;
-    const idb = (await b.newGame('fighter')).sessionId;
+    const ida = (await a.newGame('u-test', 'fighter')).sessionId;
+    const idb = (await b.newGame('u-test', 'fighter')).sessionId;
     const ra = await a.applyChoice(ida, 'fight', ['slash']);
     const rb = await b.applyChoice(idb, 'fight', ['slash']);
     expect(ra.combat!.log).toEqual(rb.combat!.log);
@@ -121,7 +121,7 @@ describe('GameSession.applyChoice', () => {
 
   it('throws GameError(400) on an unknown choice id', async () => {
     const s = newSession();
-    const { sessionId } = await s.newGame('rogue');
+    const { sessionId } = await s.newGame('u-test', 'rogue');
     await expect(s.applyChoice(sessionId, 'nope')).rejects.toMatchObject({ status: 400 });
   });
 });
@@ -135,7 +135,7 @@ describe('GameSession.applyChoice — quoted ending condition', () => {
       routes: createMemoryRouteStore([bundle]),
     };
     const s = createGameSession(createMemoryStore(), deps);
-    const { sessionId } = await s.newGame('rogue');
+    const { sessionId } = await s.newGame('u-test', 'rogue');
     const res = await s.applyChoice(sessionId, 'sneak');
     expect(res.save.currentNodeId).toBe('n3');
     expect(res.ending).toBe('reach-keep');
@@ -154,7 +154,7 @@ describe('GameSession.applyChoice — defeat path', () => {
       routes: createMemoryRouteStore([SAMPLE_BUNDLE]),
     };
     const s = createGameSession(createMemoryStore(), deps);
-    const { sessionId } = await s.newGame('rogue');
+    const { sessionId } = await s.newGame('u-test', 'rogue');
     const res = await s.applyChoice(sessionId, 'fight', ['slash']);
     expect(res.combat!.winner).toBe('enemies');
     expect(res.ending).toBe('defeat');
@@ -179,7 +179,7 @@ describe('GameSession.newGame — route selection', () => {
     second.route.id = 'route-2';
     second.route.title = 'Second Route';
     const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE, second));
-    const res = await s.newGame('rogue', 'route-2');
+    const res = await s.newGame('u-test', 'rogue', 'route-2');
     expect(res.save.routeId).toBe('route-2');
     expect(res.node.id).toBe('n1');
   });
@@ -189,12 +189,12 @@ describe('GameSession.newGame — route selection', () => {
     draft.route.id = 'draft-route';
     draft.route.status = 'draft';
     const s = createGameSession(createMemoryStore(), depsWith(draft));
-    await expect(s.newGame('rogue', 'draft-route')).rejects.toMatchObject({ status: 409 });
+    await expect(s.newGame('u-test', 'rogue', 'draft-route')).rejects.toMatchObject({ status: 409 });
   });
 
   it('throws 404 when newGame targets a missing route', async () => {
     const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE));
-    await expect(s.newGame('rogue', 'ghost-route')).rejects.toMatchObject({ status: 404 });
+    await expect(s.newGame('u-test', 'rogue', 'ghost-route')).rejects.toMatchObject({ status: 404 });
   });
 
   it('picks a random published route when no routeId is given', async () => {
@@ -202,7 +202,7 @@ describe('GameSession.newGame — route selection', () => {
     second.route.id = 'route-2';
     const deps = { ...depsWith(SAMPLE_BUNDLE, second), random: () => 0 };
     const s = createGameSession(createMemoryStore(), deps);
-    const res = await s.newGame('rogue'); // no routeId
+    const res = await s.newGame('u-test', 'rogue'); // no routeId
     expect(res.save.routeId).toBe(SAMPLE_ROUTE.id); // index 0 of the published pool
     expect(res.save.playedRouteIds).toEqual([SAMPLE_ROUTE.id]);
   });
@@ -216,7 +216,7 @@ describe('GameSession.newGame — route selection', () => {
     // list order: [draft, published]; random()=0 must skip draft and pick pub-route
     const deps = { ...depsWith(draft, published), random: () => 0 };
     const s = createGameSession(createMemoryStore(), deps);
-    const res = await s.newGame('rogue');
+    const res = await s.newGame('u-test', 'rogue');
     expect(res.save.routeId).toBe('pub-route');
   });
 
@@ -225,7 +225,7 @@ describe('GameSession.newGame — route selection', () => {
     draft.route.id = 'draft-route';
     draft.route.status = 'draft';
     const s = createGameSession(createMemoryStore(), depsWith(draft));
-    await expect(s.newGame('rogue')).rejects.toMatchObject({ status: 409 });
+    await expect(s.newGame('u-test', 'rogue')).rejects.toMatchObject({ status: 409 });
   });
 });
 
@@ -243,7 +243,7 @@ describe('GameSession.continueToNextRoute', () => {
     const second = structuredClone(SAMPLE_BUNDLE);
     second.route.id = 'route-2';
     const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE, second));
-    const { sessionId } = await s.newGame('rogue'); // picks SAMPLE_ROUTE (index 0)
+    const { sessionId } = await s.newGame('u-test', 'rogue'); // picks SAMPLE_ROUTE (index 0)
     await s.applyChoice(sessionId, 'sneak'); // hero rep -> 1, reaches an ending
 
     const res = await s.continueToNextRoute(sessionId);
@@ -259,7 +259,7 @@ describe('GameSession.continueToNextRoute', () => {
     const second = structuredClone(SAMPLE_BUNDLE);
     second.route.id = 'route-2';
     const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE, second));
-    const { sessionId } = await s.newGame('rogue');
+    const { sessionId } = await s.newGame('u-test', 'rogue');
     const next = await s.continueToNextRoute(sessionId);
     expect(next.save.routeId).toBe('route-2');
     // pool now exhausted
@@ -268,7 +268,7 @@ describe('GameSession.continueToNextRoute', () => {
 
   it('throws 409 when no further published route remains', async () => {
     const s = createGameSession(createMemoryStore(), depsWith(SAMPLE_BUNDLE));
-    const { sessionId } = await s.newGame('rogue'); // only route -> already played
+    const { sessionId } = await s.newGame('u-test', 'rogue'); // only route -> already played
     await expect(s.continueToNextRoute(sessionId)).rejects.toMatchObject({ status: 409 });
   });
 });
@@ -282,7 +282,7 @@ describe('GameSession.applyChoice — hasNextRoute', () => {
       routes: createMemoryRouteStore([SAMPLE_BUNDLE, second]), random: () => 0,
     };
     const s = createGameSession(createMemoryStore(), deps);
-    const { sessionId } = await s.newGame('rogue'); // plays SAMPLE_ROUTE
+    const { sessionId } = await s.newGame('u-test', 'rogue'); // plays SAMPLE_ROUTE
     const res = await s.applyChoice(sessionId, 'sneak'); // reaches 'reach-keep' ending
     expect(res.ending).toBe('reach-keep');
     expect(res.hasNextRoute).toBe(true);
@@ -290,7 +290,7 @@ describe('GameSession.applyChoice — hasNextRoute', () => {
 
   it('sets hasNextRoute=false at an ending when no other published route remains', async () => {
     const s = newSession(); // default deps: only SAMPLE_BUNDLE
-    const { sessionId } = await s.newGame('rogue');
+    const { sessionId } = await s.newGame('u-test', 'rogue');
     const res = await s.applyChoice(sessionId, 'sneak');
     expect(res.ending).toBe('reach-keep');
     expect(res.hasNextRoute).toBe(false);
@@ -307,7 +307,7 @@ describe('GameSession.applyChoice — hasNextRoute', () => {
       routes: createMemoryRouteStore([deadEnd, second]), random: () => 0,
     };
     const s = createGameSession(createMemoryStore(), deps);
-    const { sessionId } = await s.newGame('rogue', 'dead-end'); // starts at n1 (no choices, no ending)
+    const { sessionId } = await s.newGame('u-test', 'rogue', 'dead-end'); // starts at n1 (no choices, no ending)
     const view = await s.getView(sessionId);
     expect(view.ending).toBeUndefined();
     expect(view.node.choices.length).toBe(0);
@@ -318,7 +318,7 @@ describe('GameSession.applyChoice — hasNextRoute', () => {
 describe('GameSession journal', () => {
   it('serves a journal entry per choice and it survives a reload (getView)', async () => {
     const s = newSession();
-    const { sessionId } = await s.newGame('rogue');
+    const { sessionId } = await s.newGame('u-test', 'rogue');
     const choice = await s.applyChoice(sessionId, 'sneak');
     expect(choice.journal).toHaveLength(1);
     expect(choice.journal[0].prose).toBe('You reach a guarded gate.');
@@ -332,7 +332,7 @@ describe('GameSession journal', () => {
 
   it('patches combat spoils onto the journal entry', async () => {
     const s = newSession();
-    const { sessionId } = await s.newGame('fighter');
+    const { sessionId } = await s.newGame('u-test', 'fighter');
     const res = await s.applyChoice(sessionId, 'fight', ['slash']);
     expect(res.combat!.winner).toBe('player'); // deterministic: START_SEED=7, fighter vs goblin
     const entry = res.save.choiceLog[res.save.choiceLog.length - 1];
@@ -367,7 +367,7 @@ describe('GameSession live event-gen', () => {
   it('enriches a live node, overlays prose + choice text, and caches it', async () => {
     const overlay = { prose: 'rich prose', choiceTexts: ['rich choice'] };
     const s = liveSession(createFakeProvider([overlay])); // queue has exactly ONE response
-    const res = await s.newGame('rogue', 'live-route');
+    const res = await s.newGame('u-test', 'rogue', 'live-route');
     expect(res.node.prose).toBe('rich prose');
     expect(res.node.choices[0].text).toBe('rich choice');
     expect(res.save.liveNodes!['s1']).toEqual(overlay);
@@ -380,7 +380,7 @@ describe('GameSession live event-gen', () => {
 
   it('falls back to stub text and does not cache when generation fails', async () => {
     const s = liveSession(createFakeProvider([{}, {}])); // both attempts bad shape (maxAttempts 2)
-    const res = await s.newGame('rogue', 'live-route');
+    const res = await s.newGame('u-test', 'rogue', 'live-route');
     expect(res.node.prose).toBe('stub prose');
     expect(res.node.choices[0].text).toBe('stub choice');
     expect(res.save.liveNodes).toBeUndefined();
@@ -391,7 +391,7 @@ describe('GameSession live event-gen', () => {
       backgrounds: BACKGROUNDS, content: createMemoryContentStores(),
       routes: createMemoryRouteStore([liveBundle()]),
     });
-    const res = await s.newGame('rogue', 'live-route');
+    const res = await s.newGame('u-test', 'rogue', 'live-route');
     expect(res.node.prose).toBe('stub prose');
   });
 
@@ -414,7 +414,7 @@ describe('GameSession live event-gen', () => {
       backgrounds: BACKGROUNDS, content: createMemoryContentStores(),
       routes: createMemoryRouteStore([advBundle]), provider: createFakeProvider([overlay]),
     });
-    const { sessionId } = await s.newGame('rogue', 'adv-route'); // starts at pregen p1 → no provider call
+    const { sessionId } = await s.newGame('u-test', 'rogue', 'adv-route'); // starts at pregen p1 → no provider call
     const after = await s.applyChoice(sessionId, 'adv');         // advances to live L1 → enrich fires
     expect(after.save.currentNodeId).toBe('L1');
     expect(after.node.prose).toBe('enriched live prose');

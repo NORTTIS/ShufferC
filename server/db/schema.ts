@@ -12,9 +12,12 @@ export const gameRoutes = pgTable('game_routes', {
 export const saveStates = pgTable('save_states', {
   id: uuid('id').primaryKey().defaultRandom(),
   routeId: text('route_id').notNull(),
+  userId: uuid('user_id'),                     // null = pre-auth legacy save (abandoned)
   save: jsonb('save').notNull(),               // full SaveState
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  userIdx: index('save_states_user_id_idx').on(t.userId),
+}));
 
 export const novels = pgTable('novels', {
   id: uuid('id').primaryKey().defaultRandom(),

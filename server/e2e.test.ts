@@ -9,6 +9,7 @@ import { createFakeProvider } from './ai/provider';
 import { createFakeEmbedder } from './rag/embeddingProvider';
 import { createMemoryNovelStore } from './rag/novelStore';
 import { createAuth } from './auth';
+import { createMemoryPlayerAuth } from './playerAuth/memoryPlayerAuth';
 import { ITEM_DB, SAMPLE_BUNDLE } from '../shared/fixtures';
 import { BACKGROUNDS } from '../shared/backgrounds';
 
@@ -19,14 +20,15 @@ function adminApp() {
   const { novels, embeddings } = createMemoryNovelStore();
   const provider = createFakeProvider([]);
   const embedder = createFakeEmbedder();
-  const session = createGameSession(createMemoryStore(), { backgrounds: BACKGROUNDS, content, routes, provider, embedder, embeddings });
-  return createApp(session, { provider, routes, content, auth: createAuth(ADMIN), novels, embeddings, embedder });
+  const saves = createMemoryStore();
+  const session = createGameSession(saves, { backgrounds: BACKGROUNDS, content, routes, provider, embedder, embeddings });
+  return createApp(session, { provider, routes, content, auth: createAuth(ADMIN), novels, embeddings, embedder }, { auth: createMemoryPlayerAuth(), saves });
 }
 
 describe('server e2e (hardcoded route)', () => {
   it('rogue sneaks past and reaches the keep', async () => {
     const s = createGameSession(createMemoryStore());
-    const { sessionId } = await s.newGame('rogue');
+    const { sessionId } = await s.newGame('u-test', 'rogue');
     const res = await s.applyChoice(sessionId, 'sneak');
     expect(res.save.currentNodeId).toBe('n3');
     expect(res.node.choices).toHaveLength(0); // terminal node
@@ -38,7 +40,7 @@ describe('server e2e (hardcoded route)', () => {
 
   it('fighter fights through the gate and reaches the cleared node', async () => {
     const s = createGameSession(createMemoryStore());
-    const { sessionId } = await s.newGame('fighter');
+    const { sessionId } = await s.newGame('u-test', 'fighter');
     const res = await s.applyChoice(sessionId, 'fight', ['slash']);
     expect(res.combat!.winner).toBe('player');
     expect(res.save.currentNodeId).toBe('n2');
@@ -52,7 +54,7 @@ describe('server e2e (hardcoded route)', () => {
 describe('combat rewards', () => {
   it('grants gold/xp on a winning fight and carries HP forward', async () => {
     const s = createGameSession(createMemoryStore());
-    const { sessionId, save } = await s.newGame('fighter');
+    const { sessionId, save } = await s.newGame('u-test', 'fighter');
     expect(save.gold).toBe(0);
     const startHp = save.vitals.currentHp;
     expect(startHp).toBeGreaterThan(0);
@@ -76,7 +78,7 @@ function shopRouteDeps() {
 describe('shop', () => {
   it('lists stock for the current node and rejects a buy without enough gold', async () => {
     const s = createGameSession(createMemoryStore(), shopRouteDeps());
-    const { sessionId } = await s.newGame('rogue', 'shop-rt');
+    const { sessionId } = await s.newGame('u-test', 'rogue', 'shop-rt');
     const shop = await s.getShop(sessionId);
     expect(shop.stock).toEqual([{ item: ITEM_DB.dagger, price: 10 }]);
     await expect(s.buy(sessionId, 'dagger')).rejects.toMatchObject({ status: 400 });
@@ -86,7 +88,7 @@ describe('shop', () => {
 describe('useItem', () => {
   it('uses a healing potion won from combat: restores HP (clamped) and consumes it', async () => {
     const s = createGameSession(createMemoryStore());
-    const { sessionId } = await s.newGame('fighter');
+    const { sessionId } = await s.newGame('u-test', 'fighter');
     const after = await s.applyChoice(sessionId, 'fight', ['slash']); // win → goblin drops healPotion (chance 1)
     expect(after.save.consumables.healPotion).toBe(1);
     const hpAfterFight = after.save.vitals.currentHp;
@@ -97,7 +99,7 @@ describe('useItem', () => {
 
   it('rejects using an item not owned', async () => {
     const s = createGameSession(createMemoryStore());
-    const { sessionId } = await s.newGame('fighter');
+    const { sessionId } = await s.newGame('u-test', 'fighter');
     await expect(s.useItem(sessionId, 'healPotion')).rejects.toMatchObject({ status: 400 });
   });
 });
@@ -105,7 +107,7 @@ describe('useItem', () => {
 describe('equip HP clamp', () => {
   it('clamps currentHp when unequipping a max-HP item drops max below current', async () => {
     const s = createGameSession(createMemoryStore());
-    const { sessionId, save } = await s.newGame('fighter'); // fighter starts with ringOfRegen equipped (con +2 → higher maxHp)
+    const { sessionId, save } = await s.newGame('u-test', 'fighter'); // fighter starts with ringOfRegen equipped (con +2 → higher maxHp)
     // currentHp starts at full (with ring). Unequip the ring → maxHp drops → currentHp must clamp down.
     const before = save.vitals.currentHp;
     const res = await s.equip(sessionId, 'ring', null);

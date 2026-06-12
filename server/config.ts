@@ -13,4 +13,9 @@ export const config = {
     email: process.env.ADMIN_EMAIL ?? 'adminshufferc@gmail.com',
     password: process.env.ADMIN_PASSWORD ?? 'admin12345678',
   },
+  supabase: {
+    url: process.env.SUPABASE_URL ?? null,       // null → in-memory player auth (dev/test)
+    anonKey: process.env.SUPABASE_ANON_KEY ?? null,
+    jwtSecret: process.env.SUPABASE_JWT_SECRET ?? null, // only for legacy HS256 projects; default is JWKS
+  },
 };

@@ -11,18 +11,20 @@ export function useAuth() {
   const [state, setState] = useState<AuthState>({ user: null, status: 'loading' });
 
   useEffect(() => {
-    const user = core.current();
+    core.onLogout(() => setState({ user: null, status: 'out' })); // refresh failed → back to login
+    const user = core.restore();
     setState({ user, status: user ? 'in' : 'out' });
+    return () => core.onLogout(() => {});
   }, []);
 
-  const register = useCallback((email: string, pw: string, confirm: string): AuthResult => {
-    const res = core.register(email, pw, confirm);
+  const register = useCallback(async (email: string, pw: string, confirm: string): Promise<AuthResult> => {
+    const res = await core.register(email, pw, confirm);
     if (res.ok) setState({ user: res.user, status: 'in' });
     return res;
   }, []);
 
-  const login = useCallback((email: string, pw: string): AuthResult => {
-    const res = core.login(email, pw);
+  const login = useCallback(async (email: string, pw: string): Promise<AuthResult> => {
+    const res = await core.login(email, pw);
     if (res.ok) setState({ user: res.user, status: 'in' });
     return res;
   }, []);
