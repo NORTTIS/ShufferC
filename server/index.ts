@@ -5,8 +5,8 @@ import { createMemoryRouteStore } from './store/memoryRouteStore';
 import { createPgRouteStore } from './store/pgRouteStore';
 import { createPgSaveStore } from './store/pgSaveStore';
 import { createMemoryContentStores, createPgContentStores, seedContentStores } from './store/contentStores';
-import { createFakeProvider } from './ai/provider';
-import { createGeminiProvider } from './ai/gemini';
+import { createProviderRegistry } from './ai/providerRegistry';
+import { GenerateOptions } from './ai/provider';
 import { createGeminiEmbedder } from './rag/embeddingProvider';
 import { createMemoryNovelStore } from './rag/novelStore';
 import { createPgNovelStore } from './rag/pgNovelStore';
@@ -26,9 +26,7 @@ const routes = db ? createPgRouteStore(db) : createMemoryRouteStore([SAMPLE_BUND
 const saves = db ? createPgSaveStore(db) : createMemoryStore();
 const { novels, embeddings } = db ? createPgNovelStore(db) : createMemoryNovelStore();
 
-const provider = config.gemini.apiKey
-  ? createGeminiProvider(config.gemini)
-  : createFakeProvider([]); // no key → AI generation endpoints report 503
+const registry = createProviderRegistry(config.gemini);
 
 const embedder = createGeminiEmbedder(config.gemini); // available:false without a key → RAG endpoints report 503
 
@@ -44,13 +42,27 @@ const playerAuth = config.supabase.url && config.supabase.anonKey
   const content = db ? createPgContentStores(db) : createMemoryContentStores();
   if (db) await seedContentStores(content);
 
+  if (db) {
+    try { await registry.reload(db); } catch { /* settings table may not exist yet — first deploy */ }
+  }
+
+  const liveEventProxy = {
+    get available() { return registry.getLiveEventProvider().available; },
+    generateStructured: (
+      prompt: string,
+      jsonSchema: object,
+      opts?: GenerateOptions,
+    ) => registry.getLiveEventProvider().generateStructured(prompt, jsonSchema, opts),
+  };
+
   const session = createGameSession(saves, {
     backgrounds: BACKGROUNDS, content, routes,
-    provider, embedder, embeddings,
+    provider: liveEventProxy, embedder, embeddings,
   });
 
   const app = createApp(session, {
-    provider,
+    registry,
+    db,
     routes,
     content,
     auth: createAuth(config.admin),
@@ -62,6 +74,8 @@ const playerAuth = config.supabase.url && config.supabase.anonKey
   app.listen(config.port, () => {
     console.log(`ShufferC server listening on http://localhost:${config.port}`);
     console.log(`Admin console: http://localhost:${config.port}/admin`);
-    console.log(`AI provider available: ${provider.available} · embedder available: ${embedder.available} · db: ${db ? 'postgres' : 'memory'} · player auth: ${config.supabase.url ? 'supabase' : 'memory'}`);
+    const fwProvider = registry.getFrameworkProvider();
+    const leProvider = registry.getLiveEventProvider();
+    console.log(`Framework gen: ${fwProvider.available ? 'available' : 'off'} · Live events: ${leProvider.available ? 'available' : 'off'} · embedder available: ${embedder.available} · db: ${db ? 'postgres' : 'memory'} · player auth: ${config.supabase.url ? 'supabase' : 'memory'}`);
   });
 })();
