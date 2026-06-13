@@ -301,7 +301,7 @@
     const $ = (id) => document.getElementById(id);
     let token = localStorage.getItem(TOKEN_KEY) || '';
 
-    function authHeaders() { return { 'Authorization': 'Bearer ' + token }; }
+    function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }; }
 
     // ---- Registry cache + field specs ----
     const REG = { attributes: [], effects: [], items: [], skills: [], enemies: [] };
