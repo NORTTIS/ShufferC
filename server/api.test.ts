@@ -5,6 +5,7 @@ import { createMemoryStore } from './store/memoryStore';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
 import { createMemoryContentStores } from './store/contentStores';
 import { createFakeProvider, AIProvider } from './ai/provider';
+import { createFakeRegistry } from './ai/providerRegistry';
 import { createAuth } from './auth';
 import { BACKGROUNDS } from '../shared/backgrounds';
 import { SAMPLE_BUNDLE } from '../shared/fixtures';
@@ -16,19 +17,23 @@ const ADMIN = { email: 'admin@test', password: 'pw' };
 const PLAYER = { email: 'p@test.co', password: 'secret1' };
 
 function app(
-  provider: AIProvider = createFakeProvider([]),
+  frameworkProvider: AIProvider = createFakeProvider([]),
   embedder: EmbeddingProvider = createFakeEmbedder(),
+  liveEventProvider: AIProvider = createFakeProvider([]),
 ) {
   const routes = createMemoryRouteStore([structuredClone(SAMPLE_BUNDLE)]);
   const { novels, embeddings } = createMemoryNovelStore();
   const content = createMemoryContentStores();
   const saves = createMemoryStore();
+  const registry = createFakeRegistry(frameworkProvider, liveEventProvider);
   const session = createGameSession(saves, {
     backgrounds: BACKGROUNDS, content,
-    routes, provider, embedder, embeddings,
+    routes, provider: liveEventProvider, embedder, embeddings,
   });
   return createApp(session, {
-    provider, routes,
+    registry,
+    db: null,
+    routes,
     content,
     auth: createAuth(ADMIN),
     novels, embeddings, embedder,
@@ -349,7 +354,7 @@ describe('POST /admin/routes/:id/nodes/:nodeId/source', () => {
 
   it('end-to-end: mark a node live → player sees Flash-enriched prose', async () => {
     // demo-route n3 is terminal (0 choices) → overlay has 0 choiceTexts.
-    const a = app(createFakeProvider([{ prose: 'a generated ending', choiceTexts: [] }]));
+    const a = app(createFakeProvider([]), createFakeEmbedder(), createFakeProvider([{ prose: 'a generated ending', choiceTexts: [] }]));
     const t = await token(a);
     const pt = await playerToken(a);
     const auth = { Authorization: `Bearer ${t}` };
@@ -467,5 +472,52 @@ describe('Player auth', () => {
     expect(res.body.map((s: { id: string }) => s.id)).toEqual([mine.body.sessionId]);
     expect(res.body[0].routeId).toBeDefined();
     expect(typeof res.body[0].updatedAt).toBe('string');
+  });
+});
+
+describe('Admin settings routes', () => {
+  it('GET /admin/settings returns current settings with key masked', async () => {
+    const a = app();
+    const t = await token(a);
+    const res = await request(a).get('/admin/settings').set('Authorization', `Bearer ${t}`);
+    expect(res.status).toBe(200);
+    expect(res.body.frameworkGenProvider).toBe('gemini');
+    expect(res.body.liveEventProvider).toBe('gemini');
+    expect(res.body.openrouterApiKey).toBeNull();
+  });
+
+  it('GET /admin/settings returns 401 without token', async () => {
+    const res = await request(app()).get('/admin/settings');
+    expect(res.status).toBe(401);
+  });
+
+  it('PATCH /admin/settings returns 503 when no DB configured', async () => {
+    const a = app();
+    const t = await token(a);
+    const res = await request(a)
+      .patch('/admin/settings')
+      .set('Authorization', `Bearer ${t}`)
+      .send({ frameworkGenProvider: 'openrouter' });
+    expect(res.status).toBe(503);
+  });
+
+  it('PATCH /admin/settings returns 400 for invalid provider value', async () => {
+    const a = app();
+    const t = await token(a);
+    const res = await request(a)
+      .patch('/admin/settings')
+      .set('Authorization', `Bearer ${t}`)
+      .send({ frameworkGenProvider: 'anthropic' });
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /admin/status includes per-task provider names', async () => {
+    const a = app();
+    const t = await token(a);
+    const res = await request(a).get('/admin/status').set('Authorization', `Bearer ${t}`);
+    expect(res.status).toBe(200);
+    expect(res.body.frameworkGenProvider).toBe('gemini');
+    expect(res.body.liveEventProvider).toBe('gemini');
+    expect(typeof res.body.providerAvailable).toBe('boolean');
   });
 });

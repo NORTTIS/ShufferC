@@ -2,7 +2,6 @@ import express, { Request, Response, NextFunction, Express } from 'express';
 import path from 'path';
 import { z } from 'zod';
 import { GameSession, GameError } from './session';
-import { AIProvider } from './ai/provider';
 import { RouteStore } from './store/RouteStore';
 import { Registries } from '../shared/types';
 import { generateFramework } from './ai/frameworkGen';
@@ -15,11 +14,15 @@ import { ContentStores } from './store/contentStores';
 import { registerContentRoutes } from './api/contentRoutes';
 import { PlayerAuthStore } from './playerAuth/PlayerAuthStore';
 import { SaveStore } from './store/SaveStore';
+import { ProviderRegistry } from './ai/providerRegistry';
+import { Db } from './db/client';
+import { serverSettings } from './db/schema';
 
 type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
 
 export interface AdminDeps {
-  provider: AIProvider;
+  registry: ProviderRegistry;
+  db: Db | null;
   routes: RouteStore;
   content: ContentStores;
   auth: Auth;
@@ -105,7 +108,7 @@ export function createApp(session: GameSession, admin: AdminDeps, player: Player
   // API (:3000). Allow cross-origin requests and answer preflight OPTIONS.
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
     next();
   });
@@ -183,7 +186,61 @@ export function createApp(session: GameSession, admin: AdminDeps, player: Player
   ));
 
   // ── Admin data endpoints (auth required; unauthenticated → 401) ───────
-  app.get('/admin/status', requireAuth(admin.auth), wrap(() => ({ providerAvailable: admin.provider.available })));
+  app.get('/admin/status', requireAuth(admin.auth), wrap(() => {
+    const s = admin.registry.getSettings();
+    const fw = admin.registry.getFrameworkProvider();
+    const le = admin.registry.getLiveEventProvider();
+    return {
+      providerAvailable: fw.available && le.available,
+      frameworkGenProvider: s.frameworkGenProvider,
+      liveEventProvider: s.liveEventProvider,
+    };
+  }));
+
+  const PatchSettingsSchema = z.object({
+    openrouterApiKey: z.string().optional(),
+    frameworkGenProvider: z.enum(['gemini', 'openrouter']).optional(),
+    frameworkGenModel: z.string().min(1).optional(),
+    liveEventProvider: z.enum(['gemini', 'openrouter']).optional(),
+    liveEventModel: z.string().min(1).optional(),
+  });
+
+  function serializeSettings(registry: ProviderRegistry) {
+    const s = registry.getSettings();
+    return {
+      openrouterApiKey: s.openrouterApiKey ? 'configured' : null,
+      frameworkGenProvider: s.frameworkGenProvider,
+      frameworkGenModel: s.frameworkGenModel,
+      liveEventProvider: s.liveEventProvider,
+      liveEventModel: s.liveEventModel,
+    };
+  }
+
+  app.get('/admin/settings', requireAuth(admin.auth), wrap(() => serializeSettings(admin.registry)));
+
+  app.patch('/admin/settings', requireAuth(admin.auth), wrap(async (req) => {
+    const parsed = PatchSettingsSchema.safeParse(req.body);
+    if (!parsed.success) throw new GameError('Invalid settings body', 400);
+    if (!admin.db) throw new GameError('Settings persistence requires a database', 503);
+
+    const DB_KEY_MAP: Record<string, string> = {
+      openrouterApiKey: 'openrouter_api_key',
+      frameworkGenProvider: 'framework_gen_provider',
+      frameworkGenModel: 'framework_gen_model',
+      liveEventProvider: 'live_event_provider',
+      liveEventModel: 'live_event_model',
+    };
+
+    for (const [field, value] of Object.entries(parsed.data)) {
+      if (value === undefined) continue;
+      const key = DB_KEY_MAP[field];
+      await admin.db.insert(serverSettings).values({ key, value })
+        .onConflictDoUpdate({ target: serverSettings.key, set: { value } });
+    }
+
+    await admin.registry.reload(admin.db);
+    return serializeSettings(admin.registry);
+  }));
 
   app.use('/admin/routes', requireAuth(admin.auth));
 
@@ -211,7 +268,7 @@ export function createApp(session: GameSession, admin: AdminDeps, player: Player
   }));
 
   app.post('/admin/routes/generate', wrap(async (req, res) => {
-    if (!admin.provider.available) throw new GameError('AI provider unavailable', 503);
+    if (!admin.registry.getFrameworkProvider().available) throw new GameError('AI provider unavailable', 503);
     const { novelId, query, contextText, title, nodeCount } = req.body ?? {};
 
     let ctx: string = contextText ?? '';
@@ -229,7 +286,7 @@ export function createApp(session: GameSession, admin: AdminDeps, player: Player
       enemyDb: await admin.content.enemies.all(),
     };
     const result = await generateFramework(
-      admin.provider,
+      admin.registry.getFrameworkProvider(),
       { contextText: ctx, title, nodeCount, sourceNovelId: novelId },
       registries,
     );
