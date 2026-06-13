@@ -205,9 +205,8 @@
               <div>
                 <label>Framework gen provider</label>
                 <select id="sFrameworkProvider">
-                  <option value="">— no change —</option>
-                  <option value="gemini">gemini</option>
-                  <option value="openrouter">openrouter</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="openrouter">OpenRouter</option>
                 </select>
               </div>
               <div>
@@ -220,9 +219,8 @@
               <div>
                 <label>Live event provider</label>
                 <select id="sLiveProvider">
-                  <option value="">— no change —</option>
-                  <option value="gemini">gemini</option>
-                  <option value="openrouter">openrouter</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="openrouter">OpenRouter</option>
                 </select>
               </div>
               <div>
@@ -303,7 +301,7 @@
     const $ = (id) => document.getElementById(id);
     let token = localStorage.getItem(TOKEN_KEY) || '';
 
-    function authHeaders() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }; }
+    function authHeaders() { return { 'Authorization': 'Bearer ' + token }; }
 
     // ---- Registry cache + field specs ----
     const REG = { attributes: [], effects: [], items: [], skills: [], enemies: [] };
@@ -891,6 +889,11 @@
           tr.appendChild(k_); tr.appendChild(v_); tbody.appendChild(tr);
         }
         $('sOpenrouterStatus').textContent = s.openrouterApiKey ? 'Current: configured' : 'Current: not configured';
+        // Pre-fill form inputs with current values
+        $('sFrameworkProvider').value = s.frameworkGenProvider;
+        $('sLiveProvider').value = s.liveEventProvider;
+        $('sFrameworkModel').value = s.frameworkGenModel;
+        $('sLiveModel').value = s.liveEventModel;
       } catch (e) {
         if (e.status === 503) {
           tbody.innerHTML = '<tr><td colspan="2" class="warn">Settings require a database connection.</td></tr>';
@@ -915,14 +918,9 @@
         if (lp) body.liveEventProvider = lp;
         const lm = $('sLiveModel').value.trim();
         if (lm) body.liveEventModel = lm;
-        if (!Object.keys(body).length) { msg.className = 'msg warn'; msg.textContent = 'No changes to save.'; return; }
-        await api('/admin/settings', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(body) });
+        await api('/admin/settings', { method: 'PATCH', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         msg.className = 'msg ok'; msg.textContent = 'Settings saved.';
         $('sOpenrouterKey').value = '';
-        $('sFrameworkProvider').value = '';
-        $('sLiveProvider').value = '';
-        $('sFrameworkModel').value = '';
-        $('sLiveModel').value = '';
         await loadSettings();
         await loadStatus();
       } catch (e) {
