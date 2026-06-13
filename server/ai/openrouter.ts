@@ -38,7 +38,9 @@ export function createOpenRouterProvider(cfg: OpenRouterConfig): AIProvider {
         throw new Error(`OpenRouter ${res.status}: ${text}`);
       }
       const data = await res.json() as { choices: Array<{ message: { content: string } }> };
-      return JSON.parse(data.choices[0].message.content);
+      const choice = data.choices?.[0];
+      if (!choice) throw new Error(`OpenRouter: no choices in response`);
+      return JSON.parse(choice.message.content);
     },
   };
 }

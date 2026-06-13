@@ -54,6 +54,15 @@ describe('createOpenRouterProvider', () => {
     expect(body.messages[1].content).toBe('user prompt');
   });
 
+  it('throws when OpenRouter returns empty choices', async () => {
+    mockFetch.mockReturnValueOnce(Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ choices: [] }),
+    } as Response));
+    const p = createOpenRouterProvider({ apiKey: 'k', proModel: 'm', flashModel: 'm' });
+    await expect(p.generateStructured('p', {})).rejects.toThrow(/no choices/i);
+  });
+
   it('throws on HTTP error from OpenRouter', async () => {
     mockFetch.mockReturnValueOnce(Promise.resolve({
       ok: false,
