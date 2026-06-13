@@ -25,13 +25,21 @@
     .status { font-size:13px; }
     .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); }
     pre { background:#0c0e14; padding:12px; border-radius:6px; overflow:auto; font-size:12px; margin:0; }
-    .hidden { display:none; }
+    .hidden { display:none !important; }
     .row { display:flex; gap:12px; }
     .row > div { flex:1; }
     .msg { margin-top:10px; font-size:13px; }
 
-    /* Login centered */
-    #login { max-width:420px; margin:48px auto; }
+    /* Login centered — large, vertically centered card */
+    #login {
+      max-width:480px; width:92%;
+      margin:auto;             /* vertical+horizontal center inside flex body */
+      padding:36px 40px;
+    }
+    #login h2 { font-size:22px !important; margin-bottom:18px !important; }
+    #login label { font-size:14px; margin:16px 0 6px; }
+    #login input { padding:13px 14px; font-size:15px; }
+    #login #loginBtn { width:100%; padding:13px; font-size:16px; margin-top:4px; }
 
     /* App shell: sidebar + content */
     .layout { flex:1 1 auto; display:flex; min-height:0; }
@@ -95,6 +103,7 @@
       <button class="navbtn active" data-view="routes">Routes</button>
       <button class="navbtn" data-view="novels">Novels</button>
       <button class="navbtn" data-view="status">Status</button>
+      <button class="navbtn" data-view="settings">Settings</button>
       <button class="navbtn" data-view="attributes">Attributes</button>
       <button class="navbtn" data-view="effects">Effects</button>
       <button class="navbtn" data-view="items">Items</button>
@@ -179,6 +188,59 @@
           <section class="card">
             <h2 style="margin-top:0;font-size:15px;">Provider status</h2>
             <div id="status" class="status">Checking provider…</div>
+          </section>
+        </div>
+
+        <!-- ===== Settings view ===== -->
+        <div id="view-settings" class="view hidden">
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">AI Provider Settings</h2>
+            <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">Changes are persisted to the database and take effect immediately. Requires DB connection.</p>
+
+            <label>OpenRouter API key (leave blank to keep existing)</label>
+            <input id="sOpenrouterKey" type="password" placeholder="sk-or-… (blank = no change)" />
+            <div id="sOpenrouterStatus" style="font-size:12px;color:var(--muted);margin:2px 0 8px;"></div>
+
+            <div class="row">
+              <div>
+                <label>Framework gen provider</label>
+                <select id="sFrameworkProvider">
+                  <option value="">— no change —</option>
+                  <option value="gemini">gemini</option>
+                  <option value="openrouter">openrouter</option>
+                </select>
+              </div>
+              <div>
+                <label>Framework gen model</label>
+                <input id="sFrameworkModel" placeholder="e.g. google/gemini-2.5-pro" />
+              </div>
+            </div>
+
+            <div class="row" style="margin-top:10px;">
+              <div>
+                <label>Live event provider</label>
+                <select id="sLiveProvider">
+                  <option value="">— no change —</option>
+                  <option value="gemini">gemini</option>
+                  <option value="openrouter">openrouter</option>
+                </select>
+              </div>
+              <div>
+                <label>Live event model</label>
+                <input id="sLiveModel" placeholder="e.g. google/gemini-2.5-flash" />
+              </div>
+            </div>
+
+            <div style="margin-top:14px;"><button id="settingsBtn">Save settings</button></div>
+            <div id="settingsMsg" class="msg"></div>
+          </section>
+
+          <section class="card">
+            <h2 style="margin-top:0;font-size:15px;">Current settings</h2>
+            <table>
+              <thead><tr><th>Key</th><th>Value</th></tr></thead>
+              <tbody id="settingsBody"></tbody>
+            </table>
           </section>
         </div>
 
@@ -516,6 +578,7 @@
       }
       // Leaving routes always returns to the list sub-screen.
       if (name === 'routes') showRoutesList();
+      if (name === 'settings') loadSettings();
       if (SPECS[name]) { renderCrud(name); loadCrud(name); }
     }
 
@@ -552,12 +615,14 @@
       const pill = $('statusPill');
       try {
         const body = await api('/admin/status', { headers: authHeaders() });
+        const fw = body.frameworkGenProvider || 'gemini';
+        const le = body.liveEventProvider || 'gemini';
         if (body.providerAvailable) {
-          s.innerHTML = 'Gemini provider: <span class="ok">available</span>';
-          pill.textContent = 'Gemini: available'; pill.style.color = 'var(--ok)';
+          s.innerHTML = 'Framework: <strong>' + fw + '</strong> <span class="ok">available</span> &nbsp;|&nbsp; Live event: <strong>' + le + '</strong> <span class="ok">available</span>';
+          pill.textContent = fw + '/' + le + ': ok'; pill.style.color = 'var(--ok)';
         } else {
-          s.innerHTML = 'Gemini provider: <span class="warn">not configured</span> — set GEMINI_API_KEY in .env to enable generation.';
-          pill.textContent = 'Gemini: off'; pill.style.color = 'var(--warn)';
+          s.innerHTML = 'Framework: <strong>' + fw + '</strong> &nbsp;|&nbsp; Live event: <strong>' + le + '</strong> — <span class="warn">provider unavailable</span>. Configure API keys in Settings or .env.';
+          pill.textContent = 'provider off'; pill.style.color = 'var(--warn)';
         }
       } catch (e) {
         s.innerHTML = '<span class="err">Status error: ' + e.message + '</span>';
@@ -808,10 +873,73 @@
       }
     }
 
+    async function loadSettings() {
+      const tbody = $('settingsBody'); tbody.innerHTML = '';
+      try {
+        const s = await api('/admin/settings', { headers: authHeaders() });
+        const rows = [
+          ['openrouterApiKey', s.openrouterApiKey ?? 'not configured'],
+          ['frameworkGenProvider', s.frameworkGenProvider],
+          ['frameworkGenModel', s.frameworkGenModel],
+          ['liveEventProvider', s.liveEventProvider],
+          ['liveEventModel', s.liveEventModel],
+        ];
+        for (const [k, v] of rows) {
+          const tr = document.createElement('tr');
+          const k_ = document.createElement('td'); k_.textContent = k;
+          const v_ = document.createElement('td'); v_.textContent = v;
+          tr.appendChild(k_); tr.appendChild(v_); tbody.appendChild(tr);
+        }
+        $('sOpenrouterStatus').textContent = s.openrouterApiKey ? 'Current: configured' : 'Current: not configured';
+      } catch (e) {
+        if (e.status === 503) {
+          tbody.innerHTML = '<tr><td colspan="2" class="warn">Settings require a database connection.</td></tr>';
+        } else {
+          tbody.innerHTML = '<tr><td colspan="2" class="err">' + e.message + '</td></tr>';
+        }
+      }
+    }
+
+    async function doSaveSettings() {
+      const msg = $('settingsMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
+      $('settingsBtn').disabled = true;
+      try {
+        const body = {};
+        const key = $('sOpenrouterKey').value.trim();
+        if (key) body.openrouterApiKey = key;
+        const fp = $('sFrameworkProvider').value;
+        if (fp) body.frameworkGenProvider = fp;
+        const fm = $('sFrameworkModel').value.trim();
+        if (fm) body.frameworkGenModel = fm;
+        const lp = $('sLiveProvider').value;
+        if (lp) body.liveEventProvider = lp;
+        const lm = $('sLiveModel').value.trim();
+        if (lm) body.liveEventModel = lm;
+        if (!Object.keys(body).length) { msg.className = 'msg warn'; msg.textContent = 'No changes to save.'; return; }
+        await api('/admin/settings', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(body) });
+        msg.className = 'msg ok'; msg.textContent = 'Settings saved.';
+        $('sOpenrouterKey').value = '';
+        $('sFrameworkProvider').value = '';
+        $('sLiveProvider').value = '';
+        $('sFrameworkModel').value = '';
+        $('sLiveModel').value = '';
+        await loadSettings();
+        await loadStatus();
+      } catch (e) {
+        msg.className = 'msg err';
+        if (e.status === 503) msg.textContent = 'Requires a database connection (no DB configured).';
+        else if (e.status === 400) msg.textContent = 'Invalid settings: ' + e.message;
+        else msg.textContent = 'Error: ' + e.message;
+      } finally {
+        $('settingsBtn').disabled = false;
+      }
+    }
+
     $('loginBtn').onclick = doLogin;
     $('logout').onclick = logout;
     $('genBtn').onclick = doGenerate;
     $('novelBtn').onclick = uploadNovel;
+    $('settingsBtn').onclick = doSaveSettings;
     $('detailBack').onclick = showRoutesList;
     for (const btn of document.querySelectorAll('.navbtn')) {
       btn.onclick = () => selectView(btn.dataset.view);
