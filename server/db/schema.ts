@@ -45,3 +45,8 @@ export const effects = pgTable('effects', contentColumns);
 export const items = pgTable('items', contentColumns);
 export const skills = pgTable('skills', contentColumns);
 export const enemies = pgTable('enemies', contentColumns);
+
+export const serverSettings = pgTable('server_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
