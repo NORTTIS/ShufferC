@@ -68,11 +68,17 @@ export function createProviderRegistry(
   initial: ProviderSettings = PROVIDER_DEFAULTS,
 ): ProviderRegistry {
   let s: ProviderSettings = { ...initial };
+  // Each provider serves a single call tier: framework gen always calls without opts (→ proModel),
+  // live events always calls with { model: 'flash' } (→ flashModel). Passing the same model string
+  // for both slots is intentional — one model per task, not per tier.
   let fw = makeProvider(s.frameworkGenProvider, s.frameworkGenModel, s.frameworkGenModel, geminiCfg, s.openrouterApiKey);
   let le = makeProvider(s.liveEventProvider, s.liveEventModel, s.liveEventModel, geminiCfg, s.openrouterApiKey);
 
   function apply(next: ProviderSettings) {
     s = { ...next };
+    // Each provider serves a single call tier: framework gen always calls without opts (→ proModel),
+    // live events always calls with { model: 'flash' } (→ flashModel). Passing the same model string
+    // for both slots is intentional — one model per task, not per tier.
     fw = makeProvider(s.frameworkGenProvider, s.frameworkGenModel, s.frameworkGenModel, geminiCfg, s.openrouterApiKey);
     le = makeProvider(s.liveEventProvider, s.liveEventModel, s.liveEventModel, geminiCfg, s.openrouterApiKey);
   }

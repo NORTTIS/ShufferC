@@ -43,7 +43,8 @@ const playerAuth = config.supabase.url && config.supabase.anonKey
   if (db) await seedContentStores(content);
 
   if (db) {
-    try { await registry.reload(db); } catch { /* settings table may not exist yet — first deploy */ }
+    try { await registry.reload(db); }
+    catch (e) { console.warn('Could not load provider settings (using defaults):', e instanceof Error ? e.message : String(e)); }
   }
 
   const liveEventProxy = {
