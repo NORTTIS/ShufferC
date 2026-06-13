@@ -1,4 +1,4 @@
-import { GenerationParams, Registries, ValidationError, StoryNode, GameRoute } from '../../shared/types';
+import { GenerationParams, Registries, ValidationError, StoryNode, GameRoute, ContentSet } from '../../shared/types';
 
 /** Build the framework-generation prompt. On retry, prior errors are appended for self-correction. */
 export function buildFrameworkPrompt(
@@ -105,4 +105,37 @@ export function buildEventPrompt(
   }
 
   return lines.join('\n');
+}
+
+/** Build the tool-driven framework-generation prompt. The model uses create_* tools to mint
+ *  any content the route needs (preferring reuse of the listed existing content), then calls
+ *  submit_route exactly once. */
+export function buildToolPrompt(params: GenerationParams, content: ContentSet): string {
+  const ids = (r: Record<string, unknown>) => Object.keys(r).join(', ') || '(none)';
+  const nodeCount = params.nodeCount ?? 4;
+  return [
+    'You are a game-route author. You have tools to CREATE reusable game content and one tool to SUBMIT the finished route.',
+    `Write a playable route titled "${params.title}" with exactly 1 act and ${nodeCount} story nodes, adapted from the source material below.`,
+    'Tools: create_attribute, create_effect, create_skill, create_item, create_enemy, submit_route.',
+    'Workflow:',
+    '1. Decide what content the route needs (enemies to fight, items to find, skills/effects they use).',
+    '2. PREFER REUSING existing content listed below. Only create a new entity when nothing existing is a close match.',
+    '3. When you must create, create dependencies first in this order: attributes -> effects -> skills -> items -> enemies. Each create_* returns {ok,id} or {ok:false,errors}; on failure, fix the args and call it again.',
+    '4. Finally call submit_route EXACTLY ONCE with { route, nodes }, where nodes is an ARRAY of node objects (id, prose, choices, optional combat, source).',
+    'Route rules:',
+    `- exactly ${nodeCount} nodes with ids n1..n${nodeCount}; list those same ids in acts[0].nodeIds.`,
+    '- every choice.nextNodeId must reference an existing node id.',
+    '- set every node "source" to "pregen"; set route.status to "draft".',
+    '- at least one terminal node (empty choices) must be reachable from n1.',
+    '- provide an ending whose "condition" is EXACTLY `currentNodeId === <id>` for a terminal node id.',
+    '- any combat.enemyIds and outcome addItems/removeItems must reference an existing OR newly-created id.',
+    'Existing content you can reference (reuse before creating):',
+    `- attributes: ${ids(content.attributes)}`,
+    `- effects: ${ids(content.effects)}`,
+    `- skills: ${ids(content.skills)}`,
+    `- items: ${ids(content.items)}`,
+    `- enemies: ${ids(content.enemies)}`,
+    'Source material to adapt into the prose and choices:',
+    params.contextText,
+  ].join('\n');
 }
