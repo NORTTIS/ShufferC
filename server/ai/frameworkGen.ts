@@ -60,7 +60,7 @@ export async function generateFramework(
           const nodes: Record<string, StoryNode> = {};
           for (const n of args.nodes ?? []) nodes[n.id] = n;
           const bundle: RouteBundle = { route: args.route, nodes, stagedContent: staged };
-          const errs = validateRouteBundle(bundle, toRegistries(merged));
+          const errs = [...validateRouteBundle(bundle, toRegistries(merged))];
           for (const [nid, node] of Object.entries(nodes)) {
             const m = moderate(node.prose);
             if (!m.ok) errs.push({ path: `nodes.${nid}.prose`, code: 'BAD_SHAPE', message: `moderation: ${m.reason}` });
@@ -68,7 +68,8 @@ export async function generateFramework(
           if (errs.length) { lastErrors = errs; return { ok: false, errors: errs }; }
           bundle.route.status = 'draft';
           bundle.route.sourceNovelId = params.sourceNovelId ?? 'adhoc';
-          finalBundle = bundle;
+          // Snapshot staged so later tool calls (the fake provider drains its whole script) can't mutate the captured bundle.
+          finalBundle = { ...bundle, stagedContent: structuredClone(staged) };
           return { ok: true };
         }
         default: {
