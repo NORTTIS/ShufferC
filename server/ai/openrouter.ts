@@ -42,5 +42,8 @@ export function createOpenRouterProvider(cfg: OpenRouterConfig): AIProvider {
       if (!choice) throw new Error(`OpenRouter: no choices in response`);
       return JSON.parse(choice.message.content);
     },
+    async generateWithTools(): Promise<void> {
+      throw new Error('OpenRouterProvider: generateWithTools not yet implemented');
+    },
   };
 }

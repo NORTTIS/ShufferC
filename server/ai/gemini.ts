@@ -74,5 +74,8 @@ export function createGeminiProvider(cfg: GeminiConfig): AIProvider {
       const result = await model.generateContent(prompt);
       return JSON.parse(result.response.text());
     },
+    async generateWithTools(): Promise<void> {
+      throw new Error('GeminiProvider: generateWithTools not yet implemented');
+    },
   };
 }
