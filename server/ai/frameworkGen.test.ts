@@ -1,57 +1,86 @@
 import { generateFramework } from './frameworkGen';
-import { createFakeProvider } from './provider';
-import { SAMPLE_BUNDLE, ITEM_DB, SKILL_DB, ENEMY_DB } from '../../shared/fixtures';
-import { Registries, RouteBundle } from '../../shared/types';
+import { createFakeToolProvider, ToolCall } from './provider';
+import { SAMPLE_BUNDLE, ATTRIBUTE_DB, EFFECT_DB, ITEM_DB, SKILL_DB, ENEMY_DB } from '../../shared/fixtures';
+import { ContentSet, RouteBundle } from '../../shared/types';
 
-const reg: Registries = { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB };
+const content: ContentSet = {
+  attributes: ATTRIBUTE_DB, effects: EFFECT_DB, items: ITEM_DB, skills: SKILL_DB, enemies: ENEMY_DB,
+};
 const params = { contextText: 'ctx', title: 'T' };
 
-// The model emits the "gen" shape: nodes as an array. frameworkGen converts it
-// back to a keyed record, so the fakes here must use the array form.
-const toGen = (b: RouteBundle) => ({ route: b.route, nodes: Object.values(b.nodes) });
+// submit_route receives nodes as an ARRAY (the model cannot emit a keyed record).
+const submitArgs = (b: RouteBundle) => ({ route: structuredClone(b.route), nodes: Object.values(structuredClone(b.nodes)) });
+const submit = (b: RouteBundle): ToolCall => ({ name: 'submit_route', args: submitArgs(b) });
 
-const validRaw = () => toGen(structuredClone(SAMPLE_BUNDLE));
-const invalidRefRaw = () => {
-  const b = structuredClone(SAMPLE_BUNDLE);
-  b.nodes['n1'].combat = { enemyIds: ['dragon'] }; // UNKNOWN_ENEMY → ref error
-  return toGen(b);
-};
-
-describe('generateFramework', () => {
-  it('succeeds on the first attempt and marks the route draft', async () => {
-    const provider = createFakeProvider([validRaw()]);
-    const res = await generateFramework(provider, params, reg);
+describe('generateFramework (tool loop)', () => {
+  it('submits a route that references only existing content', async () => {
+    const provider = createFakeToolProvider([[submit(SAMPLE_BUNDLE)]]);
+    const res = await generateFramework(provider, params, content);
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.attempts).toBe(1);
       expect(res.bundle.route.status).toBe('draft');
       expect(res.bundle.route.sourceNovelId).toBe('adhoc');
+      expect(res.toolCalls).toBe(1);
     }
   });
 
-  it('retries after a referential error then succeeds, feeding errors back', async () => {
-    const provider = createFakeProvider([invalidRefRaw(), validRaw()]);
-    const res = await generateFramework(provider, params, reg);
+  it('creates a new enemy then references it in the submitted route', async () => {
+    const b = structuredClone(SAMPLE_BUNDLE);
+    b.nodes['n1'].combat = { enemyIds: ['ice_wraith'] };
+    const provider = createFakeToolProvider([[
+      { name: 'create_enemy', args: { id: 'ice_wraith', name: 'Ice Wraith', stats: { str: 6 }, hp: 12, skillPriority: [] } },
+      submit(b),
+    ]]);
+    const res = await generateFramework(provider, params, content);
     expect(res.ok).toBe(true);
-    if (res.ok) expect(res.attempts).toBe(2);
-  });
-
-  it('fails after maxAttempts with collected errors', async () => {
-    const provider = createFakeProvider([{}, invalidRefRaw(), invalidRefRaw()]);
-    const res = await generateFramework(provider, params, reg, { maxAttempts: 3 });
-    expect(res.ok).toBe(false);
-    if (!res.ok) {
-      expect(res.attempts).toBe(3);
-      expect(res.errors.length).toBeGreaterThan(0);
+    if (res.ok) {
+      expect(res.bundle.stagedContent?.enemies['ice_wraith']?.name).toBe('Ice Wraith');
+      expect(res.toolCalls).toBe(2);
     }
   });
 
-  it('treats moderation-blocked prose as a failed attempt', async () => {
-    const bad = structuredClone(SAMPLE_BUNDLE);
-    bad.nodes['n1'].prose = 'There is gore everywhere.'; // banned term
-    const provider = createFakeProvider([toGen(bad)]);
-    const res = await generateFramework(provider, params, reg, { maxAttempts: 1 });
+  it('returns a tool error for an invalid create, then succeeds after correction', async () => {
+    const provider = createFakeToolProvider([[
+      { name: 'create_effect', args: { id: 'frost', name: 'Frost', archetype: 'BOGUS', kind: 'dot' } },
+      { name: 'create_effect', args: { id: 'frost', name: 'Frost', archetype: 'dot', kind: 'dot', magnitude: 2, duration: 2 } },
+      submit(SAMPLE_BUNDLE),
+    ]]);
+    const res = await generateFramework(provider, params, content);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.bundle.stagedContent?.effects['frost']).toBeDefined();
+  });
+
+  it('rejects creating an id that already exists globally', async () => {
+    const provider = createFakeToolProvider([[
+      { name: 'create_attribute', args: { id: 'str', name: 'Strength', abbrev: 'STR', roles: ['core'] } },
+    ]]);
+    const res = await generateFramework(provider, params, content);
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.errors.some((e: { message: string }) => e.message.includes('moderation'))).toBe(true);
+  });
+
+  it('fails when the model never submits a route', async () => {
+    const provider = createFakeToolProvider([[
+      { name: 'create_enemy', args: { id: 'wraith', name: 'Wraith', stats: { str: 5 }, hp: 8, skillPriority: [] } },
+    ]]);
+    const res = await generateFramework(provider, params, content);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors.length).toBeGreaterThan(0);
+  });
+
+  it('rejects a submitted route whose combat references an unknown enemy', async () => {
+    const b = structuredClone(SAMPLE_BUNDLE);
+    b.nodes['n1'].combat = { enemyIds: ['does_not_exist'] };
+    const provider = createFakeToolProvider([[submit(b)]]);
+    const res = await generateFramework(provider, params, content);
+    expect(res.ok).toBe(false);
+  });
+
+  it('treats moderation-blocked prose as a submit failure', async () => {
+    const b = structuredClone(SAMPLE_BUNDLE);
+    b.nodes['n1'].prose = 'There is gore everywhere.';
+    const provider = createFakeToolProvider([[submit(b)]]);
+    const res = await generateFramework(provider, params, content);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.errors.some((e) => e.message.includes('moderation'))).toBe(true);
   });
 });
