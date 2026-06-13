@@ -1,5 +1,6 @@
 import { createProviderRegistry, createFakeRegistry, PROVIDER_DEFAULTS, ProviderSettings } from './providerRegistry';
 import { GeminiConfig } from './gemini';
+import { createFakeProvider } from './provider';
 
 const GEMINI: GeminiConfig = {
   apiKey: 'gkey',
@@ -70,7 +71,6 @@ describe('createProviderRegistry', () => {
 
 describe('createFakeRegistry', () => {
   it('returns a registry backed by the provided providers', () => {
-    const { createFakeProvider } = require('./provider');
     const fw = createFakeProvider([{ a: 1 }]);
     const le = createFakeProvider([{ b: 2 }]);
     const reg = createFakeRegistry(fw, le);
@@ -79,7 +79,6 @@ describe('createFakeRegistry', () => {
   });
 
   it('reload is a no-op', async () => {
-    const { createFakeProvider } = require('./provider');
     const reg = createFakeRegistry(createFakeProvider([]));
     await expect(reg.reload({} as any)).resolves.toBeUndefined();
   });

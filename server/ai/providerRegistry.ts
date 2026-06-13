@@ -1,4 +1,4 @@
-import { AIProvider, createFakeProvider } from './provider';
+import { AIProvider } from './provider';
 import { createGeminiProvider, GeminiConfig } from './gemini';
 import { createOpenRouterProvider } from './openrouter';
 import { Db } from '../db/client';
@@ -45,15 +45,20 @@ function makeProvider(
   return createGeminiProvider(geminiCfg);
 }
 
+const VALID_PROVIDERS: ProviderType[] = ['gemini', 'openrouter'];
+function toProviderType(v: string | undefined): ProviderType | undefined {
+  return v && VALID_PROVIDERS.includes(v as ProviderType) ? (v as ProviderType) : undefined;
+}
+
 export async function loadSettingsFromDb(db: Db): Promise<ProviderSettings> {
   const rows = await db.select().from(serverSettings);
   const map: Record<string, string> = {};
   for (const row of rows) map[row.key] = row.value;
   return {
     openrouterApiKey: map['openrouter_api_key'] ?? PROVIDER_DEFAULTS.openrouterApiKey,
-    frameworkGenProvider: (map['framework_gen_provider'] as ProviderType | undefined) ?? PROVIDER_DEFAULTS.frameworkGenProvider,
+    frameworkGenProvider: toProviderType(map['framework_gen_provider']) ?? PROVIDER_DEFAULTS.frameworkGenProvider,
     frameworkGenModel: map['framework_gen_model'] ?? PROVIDER_DEFAULTS.frameworkGenModel,
-    liveEventProvider: (map['live_event_provider'] as ProviderType | undefined) ?? PROVIDER_DEFAULTS.liveEventProvider,
+    liveEventProvider: toProviderType(map['live_event_provider']) ?? PROVIDER_DEFAULTS.liveEventProvider,
     liveEventModel: map['live_event_model'] ?? PROVIDER_DEFAULTS.liveEventModel,
   };
 }
