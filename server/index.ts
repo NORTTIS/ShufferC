@@ -6,7 +6,7 @@ import { createPgRouteStore } from './store/pgRouteStore';
 import { createPgSaveStore } from './store/pgSaveStore';
 import { createMemoryContentStores, createPgContentStores, seedContentStores } from './store/contentStores';
 import { createProviderRegistry } from './ai/providerRegistry';
-import { GenerateOptions } from './ai/provider';
+import { GenerateOptions, ToolDef, ToolHandler } from './ai/provider';
 import { createGeminiEmbedder } from './rag/embeddingProvider';
 import { createMemoryNovelStore } from './rag/novelStore';
 import { createPgNovelStore } from './rag/pgNovelStore';
@@ -54,6 +54,12 @@ const playerAuth = config.supabase.url && config.supabase.anonKey
       jsonSchema: object,
       opts?: GenerateOptions,
     ) => registry.getLiveEventProvider().generateStructured(prompt, jsonSchema, opts),
+    generateWithTools: (
+      prompt: string,
+      tools: ToolDef[],
+      handler: ToolHandler,
+      opts?: GenerateOptions & { maxToolCalls?: number },
+    ) => registry.getLiveEventProvider().generateWithTools(prompt, tools, handler, opts),
   };
 
   const session = createGameSession(saves, {
