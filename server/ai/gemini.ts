@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { AIProvider, GenerateOptions } from './provider';
+import { AIProvider, GenerateOptions, ToolDef, ToolHandler } from './provider';
 
 export interface GeminiConfig {
   apiKey: string | null;
@@ -74,8 +74,41 @@ export function createGeminiProvider(cfg: GeminiConfig): AIProvider {
       const result = await model.generateContent(prompt);
       return JSON.parse(result.response.text());
     },
-    async generateWithTools(): Promise<void> {
-      throw new Error('GeminiProvider: generateWithTools not yet implemented');
+    async generateWithTools(
+      prompt: string,
+      tools: ToolDef[],
+      handler: ToolHandler,
+      opts?: GenerateOptions & { maxToolCalls?: number },
+    ): Promise<void> {
+      if (!client) throw new Error('Gemini provider unavailable: no API key');
+      const modelName = opts?.model === 'flash' ? cfg.flashModel : cfg.proModel;
+      const max = opts?.maxToolCalls ?? 30;
+      const functionDeclarations = tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        // Gemini's parameters use the same restricted subset as responseSchema.
+        parameters: sanitizeForGemini(t.parameters) as never,
+      }));
+      const model = client.getGenerativeModel({
+        model: modelName,
+        tools: [{ functionDeclarations }] as never,
+      });
+      const chat = model.startChat();
+      let result = await chat.sendMessage(prompt);
+      let count = 0;
+      // Loop: model emits functionCall(s) → run handler → send functionResponse(s) → repeat.
+      while (true) {
+        const calls = result.response.functionCalls?.() ?? [];
+        if (!calls.length) return; // model produced no further calls — generation is done
+        const responses: unknown[] = [];
+        for (const call of calls) {
+          if (count >= max) return;
+          count++;
+          const out = await handler({ name: call.name, args: call.args });
+          responses.push({ functionResponse: { name: call.name, response: { result: out } } });
+        }
+        result = await chat.sendMessage(responses as never);
+      }
     },
   };
 }
