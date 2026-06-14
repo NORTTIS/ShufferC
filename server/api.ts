@@ -3,7 +3,7 @@ import path from 'path';
 import { z } from 'zod';
 import { GameSession, GameError } from './session';
 import { RouteStore } from './store/RouteStore';
-import { Registries } from '../shared/types';
+import { ContentSet } from '../shared/types';
 import { generateFramework } from './ai/frameworkGen';
 import { Auth } from './auth';
 import { NovelStore, EmbeddingStore } from './rag/novelStore';
@@ -280,18 +280,20 @@ export function createApp(session: GameSession, admin: AdminDeps, player: Player
       );
     }
 
-    const registries: Registries = {
-      itemDb: await admin.content.items.all(),
-      skillDb: await admin.content.skills.all(),
-      enemyDb: await admin.content.enemies.all(),
+    const content: ContentSet = {
+      attributes: await admin.content.attributes.all(),
+      effects: await admin.content.effects.all(),
+      items: await admin.content.items.all(),
+      skills: await admin.content.skills.all(),
+      enemies: await admin.content.enemies.all(),
     };
     const result = await generateFramework(
       admin.registry.getFrameworkProvider(),
       { contextText: ctx, title, nodeCount, sourceNovelId: novelId },
-      registries,
+      content,
     );
     if (!result.ok) {
-      res.status(422).json({ errors: result.errors, attempts: result.attempts });
+      res.status(422).json({ errors: result.errors, toolCalls: result.toolCalls });
       return undefined;
     }
     const routeId = await admin.routes.create(result.bundle);
