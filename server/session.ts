@@ -5,7 +5,6 @@ import {
 import { applyRepDelta } from '../shared/engine/reputation';
 import { SAVE_VERSION, EQUIP_SLOTS } from '../shared/constants';
 import { Background, BACKGROUNDS } from '../shared/backgrounds';
-import { SAMPLE_BUNDLE } from '../shared/fixtures';
 import { effectiveStats, buildPlayerActor, buildEnemyActor, deriveMaxHp } from '../shared/engine/character';
 import { rollRewards, Rewards } from '../shared/engine/rewards';
 import { runCombat } from '../shared/engine/combat';
@@ -52,7 +51,7 @@ export interface SessionDeps {
 const DEFAULT_DEPS: SessionDeps = {
   backgrounds: BACKGROUNDS,
   content: createMemoryContentStores(),
-  routes: createMemoryRouteStore([SAMPLE_BUNDLE]),
+  routes: createMemoryRouteStore(),
   random: Math.random,
 };
 
