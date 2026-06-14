@@ -38,5 +38,19 @@ describe('content validation', () => {
       expect(() => validateEnemy({ id: 'e', name: 'E', stats: {}, hp: 0, skillPriority: [] }, ctx))
         .toThrow(/hp/);
     });
+    const enemy = (reward: unknown) => ({ id: 'e', name: 'E', stats: {}, hp: 5, skillPriority: [], reward });
+    it('rejects reward.gold with min > max', () => {
+      expect(() => validateEnemy(enemy({ gold: [10, 1] }), ctx)).toThrow(/gold/);
+    });
+    it('rejects negative reward.xp', () => {
+      expect(() => validateEnemy(enemy({ xp: -5 }), ctx)).toThrow(/xp/);
+    });
+    it('rejects a drop chance outside [0,1]', () => {
+      expect(() => validateEnemy(enemy({ drops: [{ itemId: 'healPotion', chance: 5 }] }), ctx)).toThrow(/chance/);
+    });
+    it('accepts a well-formed reward', () => {
+      const e = validateEnemy(enemy({ gold: [3, 8], xp: 10, drops: [{ itemId: 'healPotion', chance: 0.5 }] }), ctx);
+      expect(e.reward).toEqual({ gold: [3, 8], xp: 10, drops: [{ itemId: 'healPotion', chance: 0.5 }] });
+    });
   });
 });
