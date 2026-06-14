@@ -37,6 +37,9 @@ export function validateRouteBundle(b: RouteBundle, reg: Registries): Validation
   // 3. Reference safety — the core AI guard.
   for (const [nid, node] of Object.entries(nodes)) {
     if (node.combat) {
+      if (node.combat.enemyIds.length === 0) {
+        errors.push({ path: `nodes.${nid}.combat`, code: 'BAD_SHAPE', message: 'combat node has no enemies' });
+      }
       for (const eid of node.combat.enemyIds) {
         if (!reg.enemyDb[eid]) {
           errors.push({ path: `nodes.${nid}.combat`, code: 'UNKNOWN_ENEMY', message: `unknown enemy ${eid}` });

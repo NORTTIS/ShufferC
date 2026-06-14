@@ -27,6 +27,10 @@ export function nonNegInt(v: unknown, field: string): number | undefined {
   if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new GameError(`${field} must be ≥ 0`, 400);
   return v;
 }
+export function posInt(v: unknown, field: string): number {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1) throw new GameError(`${field} must be an integer ≥ 1`, 400);
+  return v;
+}
 export function arr(v: unknown, field: string): any[] {
   if (v === undefined || v === null) return [];
   if (!Array.isArray(v)) throw new GameError(`${field} must be an array`, 400);
@@ -95,6 +99,6 @@ export function validateEnemy(body: any, ctx: ValidationCtx): Enemy {
   }
   for (const sid of arr(body?.skillPriority, 'skillPriority')) if (!ctx.skills[sid]) throw new GameError(`Unknown skill ${sid}`, 400);
   for (const d of arr(body?.reward?.drops, 'reward.drops')) if (!ctx.items[d?.itemId]) throw new GameError(`Unknown item ${d?.itemId}`, 400);
-  return { id: slug(body.id, 'id'), name: str(body.name, 'name'), stats, hp: nonNegInt(body.hp, 'hp') ?? 1,
+  return { id: slug(body.id, 'id'), name: str(body.name, 'name'), stats, hp: posInt(body.hp, 'hp'),
     skillPriority: body.skillPriority ?? [], sprite: body.sprite, reward: body.reward };
 }

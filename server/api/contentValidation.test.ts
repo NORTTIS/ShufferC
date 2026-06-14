@@ -33,4 +33,10 @@ describe('content validation', () => {
     expect(() => validateItem({ id: 'i', name: 'I', slot: 'weapon', kind: 'gear', statMods: [1, 2] }, ctx)).toThrow(GameError);
     expect(() => validateEnemy({ id: 'en', name: 'E', stats: 'bad', hp: 5 }, ctx)).toThrow(GameError);
   });
+  describe('validateEnemy', () => {
+    it('rejects hp:0 (dead on arrival)', () => {
+      expect(() => validateEnemy({ id: 'e', name: 'E', stats: {}, hp: 0, skillPriority: [] }, ctx))
+        .toThrow(/hp/);
+    });
+  });
 });

@@ -84,4 +84,11 @@ describe('validateRouteBundle', () => {
     const codes = validateRouteBundle(b, reg).map((e) => e.code);
     expect(codes).toContain('NO_REACHABLE_ENDING');
   });
+
+  it('BAD_SHAPE when a combat node has no enemies', () => {
+    const b = clone();
+    b.nodes['n1'].combat = { enemyIds: [] };
+    const codes = validateRouteBundle(b, reg).map((e) => e.code);
+    expect(codes).toContain('BAD_SHAPE');
+  });
 });
