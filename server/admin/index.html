@@ -665,6 +665,23 @@
 
     function renderNodes(routeId, bundle) {
       const box = $('nodesOut'); box.innerHTML = '';
+      const staged = bundle.stagedContent;
+      if (staged) {
+        const kinds = ['attributes', 'effects', 'skills', 'items', 'enemies'];
+        const parts = [];
+        for (const k of kinds) {
+          const ids = Object.keys(staged[k] || {});
+          if (ids.length) parts.push(k + ': ' + ids.join(', '));
+        }
+        if (parts.length) {
+          const banner = document.createElement('div');
+          banner.className = 'status';
+          banner.style.color = 'var(--gold, #c8a24a)';
+          banner.style.fontSize = '12px'; banner.style.marginBottom = '8px';
+          banner.textContent = 'New content this route will add on publish — ' + parts.join('  |  ');
+          box.appendChild(banner);
+        }
+      }
       const pool = Array.isArray(bundle.route && bundle.route.itemPool) ? bundle.route.itemPool : [];
       if (pool.length) {
         const hint = document.createElement('div');
@@ -775,8 +792,20 @@
     }
 
     async function publishRoute(id) {
-      await api('/admin/routes/' + id + '/publish', { method: 'POST', headers: authHeaders() });
-      await loadRoutes();
+      const bundle = await api('/admin/routes/' + id, { headers: authHeaders() });
+      const staged = bundle.stagedContent;
+      if (staged) {
+        const counts = ['attributes', 'effects', 'skills', 'items', 'enemies']
+          .map(function (k) { var n = Object.keys(staged[k] || {}).length; return n ? n + ' ' + k : null; })
+          .filter(Boolean);
+        if (counts.length && !confirm('Publishing will add ' + counts.join(', ') + ' to the registry. Continue?')) return;
+      }
+      try {
+        await api('/admin/routes/' + id + '/publish', { method: 'POST', headers: authHeaders() });
+        await loadRoutes();
+      } catch (e) {
+        alert('Publish failed: ' + (e && e.message ? e.message : String(e)));
+      }
     }
 
     async function loadNovels() {
