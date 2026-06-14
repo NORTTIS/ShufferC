@@ -12,6 +12,7 @@ import { ingestNovel } from './rag/ingest';
 import { retrieveContext } from './rag/retrieve';
 import { ContentStores } from './store/contentStores';
 import { registerContentRoutes } from './api/contentRoutes';
+import { flushStagedContent } from './api/publishStaged';
 import { PlayerAuthStore } from './playerAuth/PlayerAuthStore';
 import { SaveStore } from './store/SaveStore';
 import { ProviderRegistry } from './ai/providerRegistry';
@@ -312,6 +313,11 @@ export function createApp(session: GameSession, admin: AdminDeps, player: Player
     const id = req.params.id as string;
     const bundle = await admin.routes.get(id);
     if (!bundle) throw new GameError(`Route ${id} not found`, 404);
+    if (bundle.stagedContent) {
+      await flushStagedContent(admin.content, bundle.stagedContent);   // throws GameError(409) on id collision
+      delete bundle.stagedContent;
+      await admin.routes.create(bundle);   // upsert the cleared bundle (still draft) in both adapters
+    }
     await admin.routes.publish(id);
     res.status(204).end();
     return undefined;

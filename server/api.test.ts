@@ -222,6 +222,35 @@ describe('Admin REST + AI route e2e', () => {
     const res = await request(a).post('/admin/routes/ghost/publish').set('Authorization', `Bearer ${t}`);
     expect(res.status).toBe(404);
   });
+
+  it('publishing a route with staged content commits it to the registry', async () => {
+    // Generate a route that also creates a brand-new enemy 'ice_wraith'.
+    const bundle = genBundle();
+    bundle.nodes[0].combat = { enemyIds: ['ice_wraith'] };
+    const a = app(createFakeToolProvider([[
+      { name: 'create_enemy', args: { id: 'ice_wraith', name: 'Ice Wraith', stats: { str: 6 }, hp: 12, skillPriority: [] } },
+      { name: 'submit_route', args: bundle },
+    ]]));
+    const t = await token(a);
+    const auth = { Authorization: `Bearer ${t}` };
+
+    const gen = await request(a).post('/admin/routes/generate').set(auth).send({ contextText: 'ctx', title: 'Staged' });
+    expect(gen.status).toBe(200);
+    const routeId = gen.body.routeId;
+
+    // The enemy is staged on the draft, NOT yet in the registry.
+    const before = await request(a).get('/admin/enemies').set(auth);
+    expect(before.body.some((e: { id: string }) => e.id === 'ice_wraith')).toBe(false);
+
+    const pub = await request(a).post('/admin/routes/' + routeId + '/publish').set(auth);
+    expect(pub.status).toBe(204);
+
+    // After publish it is committed and stagedContent is cleared.
+    const after = await request(a).get('/admin/enemies').set(auth);
+    expect(after.body.some((e: { id: string }) => e.id === 'ice_wraith')).toBe(true);
+    const view = await request(a).get('/admin/routes/' + routeId).set(auth);
+    expect(view.body.stagedContent).toBeUndefined();
+  });
 });
 
 describe('Admin novels + RAG', () => {
