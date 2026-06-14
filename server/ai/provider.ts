@@ -8,6 +8,11 @@ export interface ToolCall { name: string; args: any; }
 /** Executes a single tool call and returns the result that is fed back to the model. */
 export type ToolHandler = (call: ToolCall) => Promise<unknown>;
 
+/** Thrown by a ToolHandler to cleanly end the tool loop (e.g. after a successful submit_route). Providers MUST catch it and resolve normally. */
+export class StopToolLoop extends Error {
+  constructor() { super('tool loop stopped'); this.name = 'StopToolLoop'; }
+}
+
 /** Thin LLM boundary. Returns parsed JSON / drives a tool loop; it does NOT validate. */
 export interface AIProvider {
   readonly available: boolean;
@@ -56,7 +61,12 @@ export function createFakeToolProvider(turns: ToolCall[][]): AIProvider {
         for (const call of turn) {
           if (count >= max) return;
           count++;
-          await handler(call);
+          try {
+            await handler(call);
+          } catch (e) {
+            if (e instanceof StopToolLoop) return;
+            throw e;
+          }
         }
       }
     },

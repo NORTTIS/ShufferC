@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { AIProvider, GenerateOptions, ToolDef, ToolHandler } from './provider';
+import { AIProvider, GenerateOptions, StopToolLoop, ToolDef, ToolHandler } from './provider';
 
 export interface GeminiConfig {
   apiKey: string | null;
@@ -104,7 +104,13 @@ export function createGeminiProvider(cfg: GeminiConfig): AIProvider {
         const responses: unknown[] = [];
         for (const call of calls) {
           count++;
-          const out = await handler({ name: call.name, args: call.args });
+          let out: unknown;
+          try {
+            out = await handler({ name: call.name, args: call.args });
+          } catch (e) {
+            if (e instanceof StopToolLoop) return;
+            throw e;
+          }
           responses.push({ functionResponse: { name: call.name, response: { result: out } } });
         }
         result = await chat.sendMessage(responses as never);

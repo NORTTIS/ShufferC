@@ -84,13 +84,16 @@ describe('generateFramework (tool loop)', () => {
     if (!res.ok) expect(res.errors.some((e) => e.message.includes('moderation'))).toBe(true);
   });
 
-  it('captured bundle is not corrupted by tool calls after submit_route', async () => {
+  it('stops the tool loop after a successful submit_route', async () => {
     const provider = createFakeToolProvider([[
       submit(SAMPLE_BUNDLE),
       { name: 'create_enemy', args: { id: 'post_submit', name: 'Post', stats: { str: 1 }, hp: 1, skillPriority: [] } },
     ]]);
     const res = await generateFramework(provider, params, content);
     expect(res.ok).toBe(true);
-    if (res.ok) expect(res.bundle.stagedContent?.enemies['post_submit']).toBeUndefined();
+    if (res.ok) {
+      expect(res.toolCalls).toBe(1);                                   // create_enemy never ran
+      expect(res.bundle.stagedContent?.enemies['post_submit']).toBeUndefined();
+    }
   });
 });

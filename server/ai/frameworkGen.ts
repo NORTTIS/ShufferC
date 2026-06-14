@@ -1,4 +1,4 @@
-import { AIProvider, ToolCall } from './provider';
+import { AIProvider, ToolCall, StopToolLoop } from './provider';
 import { CONTENT_TOOL_DEFS } from './schema';
 import { buildToolPrompt } from './prompt';
 import { moderate } from './moderate';
@@ -68,9 +68,9 @@ export async function generateFramework(
           if (errs.length) { lastErrors = errs; return { ok: false, errors: errs }; }
           bundle.route.status = 'draft';
           bundle.route.sourceNovelId = params.sourceNovelId ?? 'adhoc';
-          // Snapshot staged so later tool calls (the fake provider drains its whole script) can't mutate the captured bundle.
+          // Snapshot staged and stop the loop immediately — no further tool calls needed.
           finalBundle = { ...bundle, stagedContent: structuredClone(staged) };
-          return { ok: true };
+          throw new StopToolLoop();
         }
         default: {
           const errors = asErrors(`unknown tool ${call.name}`);
@@ -79,6 +79,7 @@ export async function generateFramework(
         }
       }
     } catch (e) {
+      if (e instanceof StopToolLoop) throw e;
       const errors = asErrors(e instanceof GameError ? e.message : String(e));
       lastErrors = errors;
       return { ok: false, errors };
