@@ -1,6 +1,5 @@
 import { SaveState, StoryNode } from '../types';
 import { RNG, mulberry32, rollD20, faceToMultiplier } from './dice';
-import { STAT_KEYS } from '../constants';
 import { applyRepDelta } from './reputation';
 
 export interface ChoiceResolution {
@@ -25,7 +24,7 @@ export function resolveChoice(
   if (choice.skillCheck) {
     const r = rng ?? mulberry32(next.seed);
     roll = rollD20(r);
-    const statValue = next.character.baseStats[choice.skillCheck.stat];
+    const statValue = next.character.baseStats[choice.skillCheck.stat] ?? 0;
     const score = statValue * faceToMultiplier(roll);
     checkPassed = score >= choice.skillCheck.dc;
   }
@@ -33,9 +32,8 @@ export function resolveChoice(
   const outcome = choice.outcome;
   if (outcome) {
     if (outcome.statDelta) {
-      for (const k of STAT_KEYS) {
-        const d = outcome.statDelta[k];
-        if (d) next.character.baseStats[k] += d;
+      for (const [k, d] of Object.entries(outcome.statDelta)) {
+        if (typeof d === 'number') next.character.baseStats[k] = (next.character.baseStats[k] ?? 0) + d;
       }
     }
     if (outcome.reputationDelta) {

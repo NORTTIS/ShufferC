@@ -38,7 +38,11 @@ function makeProvider(
 ): AIProvider {
   if (type === 'openrouter') {
     if (!openrouterApiKey) {
-      return { available: false, async generateStructured() { throw new Error('OpenRouter API key not configured'); } };
+      return {
+        available: false,
+        async generateStructured() { throw new Error('OpenRouter API key not configured'); },
+        async generateWithTools() { throw new Error('OpenRouter API key not configured'); },
+      };
     }
     return createOpenRouterProvider({ apiKey: openrouterApiKey, proModel, flashModel });
   }

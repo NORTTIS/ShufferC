@@ -4,7 +4,7 @@ import { createGameSession } from './session';
 import { createMemoryStore } from './store/memoryStore';
 import { createMemoryRouteStore } from './store/memoryRouteStore';
 import { createMemoryContentStores } from './store/contentStores';
-import { createFakeProvider, AIProvider } from './ai/provider';
+import { createFakeProvider, createFakeToolProvider, AIProvider } from './ai/provider';
 import { createFakeRegistry } from './ai/providerRegistry';
 import { createAuth } from './auth';
 import { BACKGROUNDS } from '../shared/backgrounds';
@@ -174,7 +174,7 @@ describe('Admin REST + AI route e2e', () => {
   }
 
   it('generate → publish → play a generated route end-to-end', async () => {
-    const a = app(createFakeProvider([genBundle()]));
+    const a = app(createFakeToolProvider([[{ name: 'submit_route', args: genBundle() }]]));
     const t = await token(a);
     const pt = await playerToken(a);
     const auth = { Authorization: `Bearer ${t}` };
@@ -196,16 +196,20 @@ describe('Admin REST + AI route e2e', () => {
   });
 
   it('returns 422 with errors when generation never validates', async () => {
-    const a = app(createFakeProvider([{}, {}, {}]));
+    const a = app(createFakeToolProvider([[]])); // one turn, no tool calls → no submit_route
     const t = await token(a);
     const res = await request(a).post('/admin/routes/generate').set('Authorization', `Bearer ${t}`).send({ contextText: 'ctx', title: 'X' });
     expect(res.status).toBe(422);
     expect(Array.isArray(res.body.errors)).toBe(true);
-    expect(res.body.attempts).toBe(3);
+    expect(res.body.toolCalls).toBe(0);
   });
 
   it('returns 503 when the provider is unavailable', async () => {
-    const unavailable: AIProvider = { available: false, async generateStructured() { throw new Error('x'); } };
+    const unavailable: AIProvider = {
+      available: false,
+      async generateStructured() { throw new Error('x'); },
+      async generateWithTools() { throw new Error('x'); },
+    };
     const a = app(unavailable);
     const t = await token(a);
     const res = await request(a).post('/admin/routes/generate').set('Authorization', `Bearer ${t}`).send({ contextText: 'ctx', title: 'X' });
@@ -217,6 +221,35 @@ describe('Admin REST + AI route e2e', () => {
     const t = await token(a);
     const res = await request(a).post('/admin/routes/ghost/publish').set('Authorization', `Bearer ${t}`);
     expect(res.status).toBe(404);
+  });
+
+  it('publishing a route with staged content commits it to the registry', async () => {
+    // Generate a route that also creates a brand-new enemy 'ice_wraith'.
+    const bundle = genBundle();
+    bundle.nodes[0].combat = { enemyIds: ['ice_wraith'] };
+    const a = app(createFakeToolProvider([[
+      { name: 'create_enemy', args: { id: 'ice_wraith', name: 'Ice Wraith', stats: { str: 6 }, hp: 12, skillPriority: [] } },
+      { name: 'submit_route', args: bundle },
+    ]]));
+    const t = await token(a);
+    const auth = { Authorization: `Bearer ${t}` };
+
+    const gen = await request(a).post('/admin/routes/generate').set(auth).send({ contextText: 'ctx', title: 'Staged' });
+    expect(gen.status).toBe(200);
+    const routeId = gen.body.routeId;
+
+    // The enemy is staged on the draft, NOT yet in the registry.
+    const before = await request(a).get('/admin/enemies').set(auth);
+    expect(before.body.some((e: { id: string }) => e.id === 'ice_wraith')).toBe(false);
+
+    const pub = await request(a).post('/admin/routes/' + routeId + '/publish').set(auth);
+    expect(pub.status).toBe(204);
+
+    // After publish it is committed and stagedContent is cleared.
+    const after = await request(a).get('/admin/enemies').set(auth);
+    expect(after.body.some((e: { id: string }) => e.id === 'ice_wraith')).toBe(true);
+    const view = await request(a).get('/admin/routes/' + routeId).set(auth);
+    expect(view.body.stagedContent).toBeUndefined();
   });
 });
 
@@ -258,7 +291,7 @@ describe('Admin novels + RAG', () => {
   });
 
   it('POST /admin/routes/generate with novelId grounds generation and tags sourceNovelId', async () => {
-    const a = app(createFakeProvider([genBundle()]));
+    const a = app(createFakeToolProvider([[{ name: 'submit_route', args: genBundle() }]]));
     const t = await token(a);
     const auth = { Authorization: `Bearer ${t}` };
     const novel = await request(a).post('/admin/novels').set(auth).send({ title: 'N', text: 'a dark tower rose' });

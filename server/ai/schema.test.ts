@@ -1,4 +1,4 @@
-import { GenBundleSchema, GEN_BUNDLE_JSON_SCHEMA, EventOverlaySchema, EVENT_OVERLAY_JSON_SCHEMA } from './schema';
+import { GenBundleSchema, GEN_BUNDLE_JSON_SCHEMA, EventOverlaySchema, EVENT_OVERLAY_JSON_SCHEMA, CONTENT_TOOL_DEFS } from './schema';
 import { SAMPLE_BUNDLE } from '../../shared/fixtures';
 
 // Gen form = the shape the model emits: nodes as an array (not a keyed record).
@@ -52,5 +52,20 @@ describe('EventOverlaySchema', () => {
   it('exposes a non-empty JSON schema', () => {
     expect(typeof EVENT_OVERLAY_JSON_SCHEMA).toBe('object');
     expect(Object.keys(EVENT_OVERLAY_JSON_SCHEMA as object).length).toBeGreaterThan(0);
+  });
+});
+
+describe('CONTENT_TOOL_DEFS', () => {
+  it('exposes the five create tools plus submit_route', () => {
+    const names = CONTENT_TOOL_DEFS.map((t) => t.name).sort();
+    expect(names).toEqual(['create_attribute', 'create_effect', 'create_enemy', 'create_item', 'create_skill', 'submit_route']);
+  });
+
+  it('every tool has a description and an object JSON-schema for parameters', () => {
+    for (const t of CONTENT_TOOL_DEFS) {
+      expect(typeof t.description).toBe('string');
+      expect(t.description.length).toBeGreaterThan(0);
+      expect(t.parameters && typeof t.parameters).toBe('object');
+    }
   });
 });

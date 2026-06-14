@@ -1,70 +1,93 @@
-import { AIProvider } from './provider';
-import { GenBundleSchema, GEN_BUNDLE_JSON_SCHEMA } from './schema';
-import { buildFrameworkPrompt } from './prompt';
+import { AIProvider, ToolCall, StopToolLoop } from './provider';
+import { CONTENT_TOOL_DEFS } from './schema';
+import { buildToolPrompt } from './prompt';
 import { moderate } from './moderate';
 import { validateRouteBundle } from '../../shared/validation';
-import { GenerationParams, Registries, GenerationResult, RouteBundle, StoryNode, ValidationError } from '../../shared/types';
+import {
+  validateAttribute, validateEffect, validateItem, validateSkill, validateEnemy,
+} from '../api/contentValidation';
+import { emptyContentSet, mergeContent, toValidationCtx, toRegistries } from './contentSet';
+import {
+  GenerationParams, ContentSet, GenerationResult, RouteBundle, StoryNode, ValidationError,
+} from '../../shared/types';
+import { GameError } from '../session';
 
 /**
- * Orchestrates one framework generation. Loops prompt → provider → Zod parse →
- * referential validate → moderate, feeding errors back into the next prompt, up
- * to maxAttempts. Admin-in-loop, so failing is acceptable — no fallback node here.
+ * Orchestrates one tool-driven framework generation. The model calls create_* tools to mint
+ * content (validated against globalContent ∪ staged) and a terminal submit_route tool. The
+ * loop logic lives here; the provider only transports the function-calling exchange.
  */
 export async function generateFramework(
   provider: AIProvider,
   params: GenerationParams,
-  reg: Registries,
-  opts: { maxAttempts?: number } = {},
+  global: ContentSet,
+  opts: { maxToolCalls?: number } = {},
 ): Promise<GenerationResult> {
-  const maxAttempts = opts.maxAttempts ?? 3;
+  const maxToolCalls = opts.maxToolCalls ?? 30;
+  const staged = emptyContentSet();
+  let finalBundle: RouteBundle | null = null;
   let lastErrors: ValidationError[] = [];
-  let lastRaw: unknown;
-  let attempts = 0;
+  let toolCalls = 0;
 
-  while (attempts < maxAttempts) {
-    attempts++;
-    const prompt = buildFrameworkPrompt(params, reg, lastErrors.length ? lastErrors : undefined);
-    const raw = await provider.generateStructured(prompt, GEN_BUNDLE_JSON_SCHEMA);
-    lastRaw = raw;
+  const asErrors = (message: string): ValidationError[] => [{ path: '', code: 'BAD_SHAPE', message }];
 
-    // Shape layer.
-    const parsed = GenBundleSchema.safeParse(raw);
-    if (!parsed.success) {
-      lastErrors = parsed.error.issues.map((i) => ({
-        path: i.path.join('.'),
-        code: 'BAD_SHAPE' as const,
-        message: i.message,
-      }));
-      continue;
+  // Stage a validated entity, rejecting ids that collide with global or already-staged content.
+  const stage = (kind: keyof ContentSet, e: { id: string }) => {
+    const g = global[kind] as Record<string, unknown>;
+    const s = staged[kind] as Record<string, unknown>;
+    if (g[e.id] || s[e.id]) {
+      const errors = asErrors(`${e.id} already exists`);
+      lastErrors = errors;
+      return { ok: false, errors };
     }
+    s[e.id] = e;
+    return { ok: true, id: e.id };
+  };
 
-    // Convert the model's node array into the keyed record RouteBundle uses.
-    const nodes: Record<string, StoryNode> = {};
-    for (const node of parsed.data.nodes) nodes[node.id] = node as unknown as StoryNode;
-    const bundle = { route: parsed.data.route, nodes } as unknown as RouteBundle;
-
-    // Referential layer.
-    const refErrors = validateRouteBundle(bundle, reg);
-    if (refErrors.length) {
-      lastErrors = refErrors;
-      continue;
+  const handler = async (call: ToolCall): Promise<unknown> => {
+    toolCalls++;
+    const merged = mergeContent(global, staged);
+    const ctx = toValidationCtx(merged);
+    try {
+      switch (call.name) {
+        case 'create_attribute': return stage('attributes', validateAttribute(call.args));
+        case 'create_effect':    return stage('effects', validateEffect(call.args, ctx));
+        case 'create_skill':     return stage('skills', validateSkill(call.args, ctx));
+        case 'create_item':      return stage('items', validateItem(call.args, ctx));
+        case 'create_enemy':     return stage('enemies', validateEnemy(call.args, ctx));
+        case 'submit_route': {
+          const args = call.args as { route: RouteBundle['route']; nodes: StoryNode[] };
+          const nodes: Record<string, StoryNode> = {};
+          for (const n of args.nodes ?? []) nodes[n.id] = n;
+          const bundle: RouteBundle = { route: args.route, nodes, stagedContent: staged };
+          const errs = [...validateRouteBundle(bundle, toRegistries(merged))];
+          for (const [nid, node] of Object.entries(nodes)) {
+            const m = moderate(node.prose);
+            if (!m.ok) errs.push({ path: `nodes.${nid}.prose`, code: 'BAD_SHAPE', message: `moderation: ${m.reason}` });
+          }
+          if (errs.length) { lastErrors = errs; return { ok: false, errors: errs }; }
+          bundle.route.status = 'draft';
+          bundle.route.sourceNovelId = params.sourceNovelId ?? 'adhoc';
+          // Snapshot staged and stop the loop immediately — no further tool calls needed.
+          finalBundle = { ...bundle, stagedContent: structuredClone(staged) };
+          throw new StopToolLoop();
+        }
+        default: {
+          const errors = asErrors(`unknown tool ${call.name}`);
+          lastErrors = errors;
+          return { ok: false, errors };
+        }
+      }
+    } catch (e) {
+      if (e instanceof StopToolLoop) throw e;
+      const errors = asErrors(e instanceof GameError ? e.message : String(e));
+      lastErrors = errors;
+      return { ok: false, errors };
     }
+  };
 
-    // Moderation layer.
-    const modErrors: ValidationError[] = [];
-    for (const [nid, node] of Object.entries(bundle.nodes)) {
-      const m = moderate(node.prose);
-      if (!m.ok) modErrors.push({ path: `nodes.${nid}.prose`, code: 'BAD_SHAPE', message: `moderation: ${m.reason}` });
-    }
-    if (modErrors.length) {
-      lastErrors = modErrors;
-      continue;
-    }
+  await provider.generateWithTools(buildToolPrompt(params, global), CONTENT_TOOL_DEFS, handler, { maxToolCalls });
 
-    bundle.route.status = 'draft';
-    bundle.route.sourceNovelId = params.sourceNovelId ?? 'adhoc';
-    return { ok: true, bundle, attempts };
-  }
-
-  return { ok: false, errors: lastErrors, attempts, lastRaw };
+  if (finalBundle) return { ok: true, bundle: finalBundle, toolCalls };
+  return { ok: false, errors: lastErrors.length ? lastErrors : asErrors('no route submitted'), toolCalls };
 }

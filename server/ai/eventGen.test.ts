@@ -42,7 +42,11 @@ describe('generateEvent', () => {
 
   it('falls back immediately with no network call when the provider is unavailable', async () => {
     let called = false;
-    const dead: AIProvider = { available: false, async generateStructured() { called = true; return {}; } };
+    const dead: AIProvider = {
+      available: false,
+      async generateStructured() { called = true; return {}; },
+      async generateWithTools() { throw new Error('unavailable'); },
+    };
     const r = await generateEvent(dead, params);
     expect(r.fallback).toBe(true);
     expect(r.attempts).toBe(0);

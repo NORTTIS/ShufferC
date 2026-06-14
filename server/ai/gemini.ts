@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { AIProvider, GenerateOptions } from './provider';
+import { AIProvider, GenerateOptions, StopToolLoop, ToolDef, ToolHandler } from './provider';
 
 export interface GeminiConfig {
   apiKey: string | null;
@@ -73,6 +73,51 @@ export function createGeminiProvider(cfg: GeminiConfig): AIProvider {
       });
       const result = await model.generateContent(prompt);
       return JSON.parse(result.response.text());
+    },
+    async generateWithTools(
+      prompt: string,
+      tools: ToolDef[],
+      handler: ToolHandler,
+      opts?: GenerateOptions & { maxToolCalls?: number },
+    ): Promise<void> {
+      if (!client) throw new Error('Gemini provider unavailable: no API key');
+      const modelName = opts?.model === 'flash' ? cfg.flashModel : cfg.proModel;
+      const max = opts?.maxToolCalls ?? 30;
+      const functionDeclarations = tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        // Gemini's parameters use the same restricted subset as responseSchema.
+        parameters: sanitizeForGemini(t.parameters) as never,
+      }));
+      const model = client.getGenerativeModel({
+        model: modelName,
+        tools: [{ functionDeclarations }] as never,
+      });
+      const chat = model.startChat();
+      let result = await chat.sendMessage(prompt);
+      let count = 0;
+      // Loop: model emits functionCall(s) → run handler (honoring maxToolCalls per call) → send functionResponse(s) → repeat.
+      while (true) {
+        const calls = result.response.functionCalls() ?? [];
+        if (!calls.length) return; // model produced no further calls — generation is done
+        if (count >= max) return;  // fast exit: budget already exhausted before this batch
+        const responses: unknown[] = [];
+        for (const call of calls) {
+          if (count >= max) break;   // hard limit: never exceed max within a batch
+          count++;
+          let out: unknown;
+          try {
+            out = await handler({ name: call.name, args: call.args });
+          } catch (e) {
+            // StopToolLoop: discard remaining calls and their responses — the loop is done.
+            if (e instanceof StopToolLoop) return;
+            throw e;
+          }
+          responses.push({ functionResponse: { name: call.name, response: { result: out } } });
+        }
+        if (count >= max) return;     // budget exhausted — stop
+        result = await chat.sendMessage(responses as never);
+      }
     },
   };
 }

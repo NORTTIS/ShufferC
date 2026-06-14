@@ -33,4 +33,33 @@ describe('content validation', () => {
     expect(() => validateItem({ id: 'i', name: 'I', slot: 'weapon', kind: 'gear', statMods: [1, 2] }, ctx)).toThrow(GameError);
     expect(() => validateEnemy({ id: 'en', name: 'E', stats: 'bad', hp: 5 }, ctx)).toThrow(GameError);
   });
+  describe('validateEnemy', () => {
+    it('rejects hp:0 (dead on arrival)', () => {
+      expect(() => validateEnemy({ id: 'e', name: 'E', stats: {}, hp: 0, skillPriority: [] }, ctx))
+        .toThrow(/hp/);
+    });
+    const enemy = (reward: unknown) => ({ id: 'e', name: 'E', stats: {}, hp: 5, skillPriority: [], reward });
+    it('rejects reward.gold with min > max', () => {
+      expect(() => validateEnemy(enemy({ gold: [10, 1] }), ctx)).toThrow(/gold/);
+    });
+    it('rejects negative reward.xp', () => {
+      expect(() => validateEnemy(enemy({ xp: -5 }), ctx)).toThrow(/xp/);
+    });
+    it('rejects a drop chance outside [0,1]', () => {
+      expect(() => validateEnemy(enemy({ drops: [{ itemId: 'healPotion', chance: 5 }] }), ctx)).toThrow(/chance/);
+    });
+    it('accepts a well-formed reward', () => {
+      const e = validateEnemy(enemy({ gold: [3, 8], xp: 10, drops: [{ itemId: 'healPotion', chance: 0.5 }] }), ctx);
+      expect(e.reward).toEqual({ gold: [3, 8], xp: 10, drops: [{ itemId: 'healPotion', chance: 0.5 }] });
+    });
+    it('rejects a NaN drop chance', () => {
+      expect(() => validateEnemy(enemy({ drops: [{ itemId: 'healPotion', chance: NaN }] }), ctx)).toThrow(/chance/);
+    });
+    it('rejects a non-integer reward.xp', () => {
+      expect(() => validateEnemy(enemy({ xp: 1.5 }), ctx)).toThrow(/xp/);
+    });
+    it('rejects non-integer reward.gold', () => {
+      expect(() => validateEnemy(enemy({ gold: [1.5, 3] }), ctx)).toThrow(/gold/);
+    });
+  });
 });

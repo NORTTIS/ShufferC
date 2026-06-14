@@ -207,6 +207,17 @@ export interface LiveOverlay {
 export interface RouteBundle {
   route: GameRoute;                     // existing type; .status carries draft|published
   nodes: Record<string, StoryNode>;     // existing StoryNode
+  stagedContent?: ContentSet;   // AI-created content pending commit; flushed + cleared on publish
+}
+
+/** A snapshot of all five content registries. Used as the global content passed into
+ *  generation, as the per-generation staging set, and as the publish-time flush payload. */
+export interface ContentSet {
+  attributes: Record<string, AttributeDef>;
+  effects: Record<string, EffectTemplate>;
+  items: Record<string, Item>;
+  skills: Record<string, Skill>;
+  enemies: Record<string, Enemy>;
 }
 
 /** Input to framework generation. */
@@ -222,6 +233,7 @@ export interface Registries {
   itemDb: Record<string, Item>;
   skillDb: Record<string, Skill>;
   enemyDb: Record<string, Enemy>;
+  attrDb: Record<string, AttributeDef>;
 }
 
 export type ValidationCode =
@@ -236,7 +248,7 @@ export type ValidationCode =
 
 export interface ValidationError { path: string; code: ValidationCode; message: string; }
 
-/** frameworkGen result — discriminated union. */
+/** frameworkGen result — discriminated union. `toolCalls` = number of tool invocations made. */
 export type GenerationResult =
-  | { ok: true; bundle: RouteBundle; attempts: number }
-  | { ok: false; errors: ValidationError[]; attempts: number; lastRaw?: unknown };
+  | { ok: true; bundle: RouteBundle; toolCalls: number }
+  | { ok: false; errors: ValidationError[]; toolCalls: number };

@@ -6,7 +6,7 @@ import { createPgRouteStore } from './store/pgRouteStore';
 import { createPgSaveStore } from './store/pgSaveStore';
 import { createMemoryContentStores, createPgContentStores, seedContentStores } from './store/contentStores';
 import { createProviderRegistry } from './ai/providerRegistry';
-import { GenerateOptions } from './ai/provider';
+import { GenerateOptions, ToolDef, ToolHandler } from './ai/provider';
 import { createGeminiEmbedder } from './rag/embeddingProvider';
 import { createMemoryNovelStore } from './rag/novelStore';
 import { createPgNovelStore } from './rag/pgNovelStore';
@@ -15,14 +15,13 @@ import { createAuth } from './auth';
 import { createMemoryPlayerAuth } from './playerAuth/memoryPlayerAuth';
 import { createSupabasePlayerAuth } from './playerAuth/supabasePlayerAuth';
 import { BACKGROUNDS } from '../shared/backgrounds';
-import { SAMPLE_BUNDLE } from '../shared/fixtures';
 import { config } from './config';
 
 const db = config.databaseUrl ? createDb(config.databaseUrl) : null;
 
 // Routes are shared between the player session (reads) and admin endpoints (writes),
 // so a freshly published route is immediately playable.
-const routes = db ? createPgRouteStore(db) : createMemoryRouteStore([SAMPLE_BUNDLE]);
+const routes = db ? createPgRouteStore(db) : createMemoryRouteStore();
 const saves = db ? createPgSaveStore(db) : createMemoryStore();
 const { novels, embeddings } = db ? createPgNovelStore(db) : createMemoryNovelStore();
 
@@ -54,6 +53,12 @@ const playerAuth = config.supabase.url && config.supabase.anonKey
       jsonSchema: object,
       opts?: GenerateOptions,
     ) => registry.getLiveEventProvider().generateStructured(prompt, jsonSchema, opts),
+    generateWithTools: (
+      prompt: string,
+      tools: ToolDef[],
+      handler: ToolHandler,
+      opts?: GenerateOptions & { maxToolCalls?: number },
+    ) => registry.getLiveEventProvider().generateWithTools(prompt, tools, handler, opts),
   };
 
   const session = createGameSession(saves, {

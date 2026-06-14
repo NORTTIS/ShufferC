@@ -27,6 +27,10 @@ export function nonNegInt(v: unknown, field: string): number | undefined {
   if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new GameError(`${field} must be ≥ 0`, 400);
   return v;
 }
+export function posInt(v: unknown, field: string): number {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1) throw new GameError(`${field} must be an integer ≥ 1`, 400);
+  return v;
+}
 export function arr(v: unknown, field: string): any[] {
   if (v === undefined || v === null) return [];
   if (!Array.isArray(v)) throw new GameError(`${field} must be an array`, 400);
@@ -86,6 +90,36 @@ export function validateSkill(body: any, ctx: ValidationCtx): Skill {
     effects: arr(body.effects, 'effects').map((e: StatusEffect) => refEffect(e, ctx)), sprite: body.sprite };
 }
 
+function validateReward(raw: unknown, ctx: ValidationCtx): Enemy['reward'] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const r = obj(raw, 'reward');
+  const reward: NonNullable<Enemy['reward']> = {};
+  if (r.gold !== undefined) {
+    const g = arr(r.gold, 'reward.gold');
+    if (g.length !== 2) throw new GameError('reward.gold must be [min, max]', 400);
+    const min = nonNegInt(g[0], 'reward.gold[0]');
+    const max = nonNegInt(g[1], 'reward.gold[1]');
+    if (min === undefined || max === undefined) throw new GameError('reward.gold must be [min, max]', 400);
+    if (!Number.isInteger(min) || !Number.isInteger(max)) throw new GameError('reward.gold must be integers', 400);
+    if (min > max) throw new GameError('reward.gold min must be ≤ max', 400);
+    reward.gold = [min, max];
+  }
+  if (r.xp !== undefined) {
+    reward.xp = nonNegInt(r.xp, 'reward.xp');
+    if (reward.xp !== undefined && !Number.isInteger(reward.xp)) throw new GameError('reward.xp must be an integer', 400);
+  }
+  if (r.drops !== undefined) {
+    reward.drops = arr(r.drops, 'reward.drops').map((d: any) => {
+      if (!ctx.items[d?.itemId]) throw new GameError(`Unknown item ${d?.itemId}`, 400);
+      if (typeof d?.chance !== 'number' || Number.isNaN(d.chance) || d.chance < 0 || d.chance > 1) throw new GameError('drop chance must be in [0,1]', 400);
+      return { itemId: d.itemId, chance: d.chance };
+    });
+  }
+  // reputationDelta is passed through as-is (numeric hero/villain/factions; not deeply validated here).
+  if (r.reputationDelta !== undefined) reward.reputationDelta = r.reputationDelta as NonNullable<Enemy['reward']>['reputationDelta'];
+  return reward;
+}
+
 export function validateEnemy(body: any, ctx: ValidationCtx): Enemy {
   const stats: Record<string, number> = {};
   for (const [k, v] of Object.entries(obj(body?.stats, 'stats'))) {
@@ -94,7 +128,6 @@ export function validateEnemy(body: any, ctx: ValidationCtx): Enemy {
     stats[k] = v;
   }
   for (const sid of arr(body?.skillPriority, 'skillPriority')) if (!ctx.skills[sid]) throw new GameError(`Unknown skill ${sid}`, 400);
-  for (const d of arr(body?.reward?.drops, 'reward.drops')) if (!ctx.items[d?.itemId]) throw new GameError(`Unknown item ${d?.itemId}`, 400);
-  return { id: slug(body.id, 'id'), name: str(body.name, 'name'), stats, hp: nonNegInt(body.hp, 'hp') ?? 1,
-    skillPriority: body.skillPriority ?? [], sprite: body.sprite, reward: body.reward };
+  return { id: slug(body.id, 'id'), name: str(body.name, 'name'), stats, hp: posInt(body.hp, 'hp'),
+    skillPriority: body.skillPriority ?? [], sprite: body.sprite, reward: validateReward(body.reward, ctx) };
 }

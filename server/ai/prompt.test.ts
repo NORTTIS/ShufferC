@@ -1,8 +1,8 @@
-import { buildFrameworkPrompt, buildEventPrompt } from './prompt';
-import { ITEM_DB, SKILL_DB, ENEMY_DB } from '../../shared/fixtures';
-import { Registries, StoryNode, GameRoute } from '../../shared/types';
+import { buildFrameworkPrompt, buildEventPrompt, buildToolPrompt } from './prompt';
+import { ITEM_DB, SKILL_DB, ENEMY_DB, ATTRIBUTE_DB } from '../../shared/fixtures';
+import { Registries, StoryNode, GameRoute, ContentSet } from '../../shared/types';
 
-const reg: Registries = { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB };
+const reg: Registries = { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, attrDb: ATTRIBUTE_DB };
 
 describe('buildFrameworkPrompt', () => {
   it('embeds the title, registry ids, context, and the pregen instruction', () => {
@@ -48,5 +48,23 @@ describe('buildEventPrompt', () => {
   it('appends prior errors on retry', () => {
     const p = buildEventPrompt(stub, route, '', '', [{ path: 'choiceTexts', code: 'BAD_SHAPE', message: 'wrong count' }]);
     expect(p).toContain('wrong count');
+  });
+});
+
+const content: ContentSet = {
+  attributes: { str: { id: 'str', name: 'Strength', abbrev: 'STR', roles: ['core'], builtin: true } },
+  effects: {}, items: {}, skills: {},
+  enemies: { goblin: { id: 'goblin', name: 'Goblin', stats: { str: 3 }, hp: 5, skillPriority: [] } },
+};
+
+describe('buildToolPrompt', () => {
+  it('names the tools, the reuse rule, and lists existing content ids', () => {
+    const p = buildToolPrompt({ contextText: 'a dark forest', title: 'Quest', nodeCount: 3 }, content);
+    expect(p).toContain('submit_route');
+    expect(p).toContain('create_enemy');
+    expect(p).toMatch(/prefer reusing/i);
+    expect(p).toContain('goblin');           // existing enemy id surfaced
+    expect(p).toContain('a dark forest');    // source material included
+    expect(p).toContain('3 story nodes');
   });
 });
