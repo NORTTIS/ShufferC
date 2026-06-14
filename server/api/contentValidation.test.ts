@@ -52,5 +52,14 @@ describe('content validation', () => {
       const e = validateEnemy(enemy({ gold: [3, 8], xp: 10, drops: [{ itemId: 'healPotion', chance: 0.5 }] }), ctx);
       expect(e.reward).toEqual({ gold: [3, 8], xp: 10, drops: [{ itemId: 'healPotion', chance: 0.5 }] });
     });
+    it('rejects a NaN drop chance', () => {
+      expect(() => validateEnemy(enemy({ drops: [{ itemId: 'healPotion', chance: NaN }] }), ctx)).toThrow(/chance/);
+    });
+    it('rejects a non-integer reward.xp', () => {
+      expect(() => validateEnemy(enemy({ xp: 1.5 }), ctx)).toThrow(/xp/);
+    });
+    it('rejects non-integer reward.gold', () => {
+      expect(() => validateEnemy(enemy({ gold: [1.5, 3] }), ctx)).toThrow(/gold/);
+    });
   });
 });

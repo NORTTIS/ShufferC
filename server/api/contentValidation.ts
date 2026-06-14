@@ -96,20 +96,26 @@ function validateReward(raw: unknown, ctx: ValidationCtx): Enemy['reward'] | und
   const reward: NonNullable<Enemy['reward']> = {};
   if (r.gold !== undefined) {
     const g = arr(r.gold, 'reward.gold');
+    if (g.length !== 2) throw new GameError('reward.gold must be [min, max]', 400);
     const min = nonNegInt(g[0], 'reward.gold[0]');
     const max = nonNegInt(g[1], 'reward.gold[1]');
-    if (g.length !== 2 || min === undefined || max === undefined) throw new GameError('reward.gold must be [min, max]', 400);
+    if (min === undefined || max === undefined) throw new GameError('reward.gold must be [min, max]', 400);
+    if (!Number.isInteger(min) || !Number.isInteger(max)) throw new GameError('reward.gold must be integers', 400);
     if (min > max) throw new GameError('reward.gold min must be ≤ max', 400);
     reward.gold = [min, max];
   }
-  if (r.xp !== undefined) reward.xp = nonNegInt(r.xp, 'reward.xp');
+  if (r.xp !== undefined) {
+    reward.xp = nonNegInt(r.xp, 'reward.xp');
+    if (reward.xp !== undefined && !Number.isInteger(reward.xp)) throw new GameError('reward.xp must be an integer', 400);
+  }
   if (r.drops !== undefined) {
     reward.drops = arr(r.drops, 'reward.drops').map((d: any) => {
       if (!ctx.items[d?.itemId]) throw new GameError(`Unknown item ${d?.itemId}`, 400);
-      if (typeof d?.chance !== 'number' || d.chance < 0 || d.chance > 1) throw new GameError('drop chance must be in [0,1]', 400);
+      if (typeof d?.chance !== 'number' || Number.isNaN(d.chance) || d.chance < 0 || d.chance > 1) throw new GameError('drop chance must be in [0,1]', 400);
       return { itemId: d.itemId, chance: d.chance };
     });
   }
+  // reputationDelta is passed through as-is (numeric hero/villain/factions; not deeply validated here).
   if (r.reputationDelta !== undefined) reward.reputationDelta = r.reputationDelta as NonNullable<Enemy['reward']>['reputationDelta'];
   return reward;
 }
