@@ -96,23 +96,26 @@ export function createGeminiProvider(cfg: GeminiConfig): AIProvider {
       const chat = model.startChat();
       let result = await chat.sendMessage(prompt);
       let count = 0;
-      // Loop: model emits functionCall(s) → run handler → send functionResponse(s) → repeat.
+      // Loop: model emits functionCall(s) → run handler (honoring maxToolCalls per call) → send functionResponse(s) → repeat.
       while (true) {
         const calls = result.response.functionCalls() ?? [];
         if (!calls.length) return; // model produced no further calls — generation is done
-        if (count >= max) return;  // limit check before batch, never mid-batch
+        if (count >= max) return;  // fast exit: budget already exhausted before this batch
         const responses: unknown[] = [];
         for (const call of calls) {
+          if (count >= max) break;   // hard limit: never exceed max within a batch
           count++;
           let out: unknown;
           try {
             out = await handler({ name: call.name, args: call.args });
           } catch (e) {
+            // StopToolLoop: discard remaining calls and their responses — the loop is done.
             if (e instanceof StopToolLoop) return;
             throw e;
           }
           responses.push({ functionResponse: { name: call.name, response: { result: out } } });
         }
+        if (count >= max) return;     // budget exhausted — stop
         result = await chat.sendMessage(responses as never);
       }
     },

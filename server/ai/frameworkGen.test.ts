@@ -96,4 +96,11 @@ describe('generateFramework (tool loop)', () => {
       expect(res.bundle.stagedContent?.enemies['post_submit']).toBeUndefined();
     }
   });
+
+  it('honors maxToolCalls mid-batch (hard limit)', async () => {
+    const mk = (id: string): ToolCall => ({ name: 'create_enemy', args: { id, name: id, stats: { str: 1 }, hp: 1, skillPriority: [] } });
+    const provider = createFakeToolProvider([[mk('a'), mk('b'), mk('c')]]); // one turn, three calls
+    const res = await generateFramework(provider, params, content, { maxToolCalls: 2 });
+    expect(res.toolCalls).toBe(2); // stops after 2, never runs the 3rd
+  });
 });
