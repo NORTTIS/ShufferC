@@ -170,4 +170,4 @@ Cả hai hành vi trên được kiểm tra bằng **fake provider** trong `serv
 - `'stops the tool loop after a successful submit_route'` — xác nhận `toolCalls === 1` dù batch còn call tiếp theo.
 - `'honors maxToolCalls mid-batch (hard limit)'` — một turn với 3 call, `maxToolCalls: 2`, kết quả `toolCalls === 2`.
 
-Real Gemini path không có Jest coverage — smoke-test thủ công qua `POST /admin/routes/generate`.
+Lưu ý quan trọng: hai test trên chạy trên **fake provider** (`createFakeToolProvider`), vốn đã tự enforce `count >= max` trong vòng lặp của nó. Chúng **khoá hợp đồng hành vi** nhưng **không** bảo vệ vòng lặp thật trong `gemini.ts` — nếu ai đó xoá `if (count >= max) break` khỏi `generateWithTools`, suite test vẫn xanh. Vì vậy: **mỗi lần sửa vòng lặp trong `gemini.ts` PHẢI smoke-test thủ công** qua `POST /admin/routes/generate` (cần API key thật), vì path này không có Jest coverage.
