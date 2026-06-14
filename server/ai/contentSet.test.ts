@@ -25,9 +25,10 @@ describe('contentSet helpers', () => {
     expect(Object.keys(toValidationCtx(base())).sort()).toEqual(['attributes', 'effects', 'items', 'skills']);
   });
 
-  it('toRegistries maps to itemDb/skillDb/enemyDb', () => {
+  it('toRegistries maps to itemDb/skillDb/enemyDb/attrDb', () => {
     const r = toRegistries(base());
     expect(r.enemyDb.goblin.name).toBe('Goblin');
-    expect(Object.keys(r).sort()).toEqual(['enemyDb', 'itemDb', 'skillDb']);
+    expect(Object.keys(r).sort()).toEqual(['attrDb', 'enemyDb', 'itemDb', 'skillDb']);
+    expect(Object.keys(r.attrDb)).toEqual(Object.keys(base().attributes));
   });
 });

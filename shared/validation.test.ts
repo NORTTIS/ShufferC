@@ -1,8 +1,8 @@
 import { validateRouteBundle } from './validation';
-import { SAMPLE_BUNDLE, ITEM_DB, SKILL_DB, ENEMY_DB } from './fixtures';
+import { SAMPLE_BUNDLE, ITEM_DB, SKILL_DB, ENEMY_DB, ATTRIBUTE_DB } from './fixtures';
 import { RouteBundle, Registries } from './types';
 
-const reg: Registries = { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB };
+const reg: Registries = { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, attrDb: ATTRIBUTE_DB };
 const clone = (): RouteBundle => structuredClone(SAMPLE_BUNDLE);
 
 describe('validateRouteBundle', () => {
@@ -88,6 +88,20 @@ describe('validateRouteBundle', () => {
   it('BAD_SHAPE when a combat node has no enemies', () => {
     const b = clone();
     b.nodes['n1'].combat = { enemyIds: [] };
+    const codes = validateRouteBundle(b, reg).map((e) => e.code);
+    expect(codes).toContain('BAD_SHAPE');
+  });
+
+  it('accepts a skillCheck on a registered custom attribute', () => {
+    const b = clone();
+    const regWithLuck: Registries = { ...reg, attrDb: { ...ATTRIBUTE_DB, luck: { id: 'luck', name: 'Luck', abbrev: 'LCK', roles: ['core' as const], builtin: false } } };
+    b.nodes['n1'].choices[1].skillCheck = { stat: 'luck', dc: 8 };
+    expect(validateRouteBundle(b, regWithLuck)).toEqual([]);
+  });
+
+  it('BAD_SHAPE when statDelta targets an unknown attribute', () => {
+    const b = clone();
+    b.nodes['n1'].choices[1].outcome = { statDelta: { nope: 1 } as Record<string, number> };
     const codes = validateRouteBundle(b, reg).map((e) => e.code);
     expect(codes).toContain('BAD_SHAPE');
   });

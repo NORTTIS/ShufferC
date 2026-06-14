@@ -1,8 +1,8 @@
 import { buildFrameworkPrompt, buildEventPrompt, buildToolPrompt } from './prompt';
-import { ITEM_DB, SKILL_DB, ENEMY_DB } from '../../shared/fixtures';
+import { ITEM_DB, SKILL_DB, ENEMY_DB, ATTRIBUTE_DB } from '../../shared/fixtures';
 import { Registries, StoryNode, GameRoute, ContentSet } from '../../shared/types';
 
-const reg: Registries = { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB };
+const reg: Registries = { itemDb: ITEM_DB, skillDb: SKILL_DB, enemyDb: ENEMY_DB, attrDb: ATTRIBUTE_DB };
 
 describe('buildFrameworkPrompt', () => {
   it('embeds the title, registry ids, context, and the pregen instruction', () => {

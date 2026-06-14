@@ -64,4 +64,17 @@ describe('resolveChoice', () => {
   it('throws on an unknown choice id', () => {
     expect(() => resolveChoice(save(), node, 'nope')).toThrow();
   });
+
+  it('applies statDelta to a custom (non-builtin) attribute key', () => {
+    const s = save();
+    s.character.baseStats.luck = 2;
+    const customNode: StoryNode = {
+      id: 'c1', source: 'pregen', prose: 'Fortune smiles.',
+      choices: [
+        { id: 'take', text: 'Take the chance', outcome: { statDelta: { luck: 3 } }, nextNodeId: 'n2' },
+      ],
+    };
+    const { save: next } = resolveChoice(s, customNode, 'take');
+    expect(next.character.baseStats.luck).toBe(5);
+  });
 });

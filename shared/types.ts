@@ -233,6 +233,7 @@ export interface Registries {
   itemDb: Record<string, Item>;
   skillDb: Record<string, Skill>;
   enemyDb: Record<string, Enemy>;
+  attrDb: Record<string, AttributeDef>;
 }
 
 export type ValidationCode =

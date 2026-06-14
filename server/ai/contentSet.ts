@@ -21,7 +21,7 @@ export function toValidationCtx(s: ContentSet): ValidationCtx {
   return { attributes: s.attributes, effects: s.effects, items: s.items, skills: s.skills };
 }
 
-/** The subset validateRouteBundle needs (items/skills/enemies). */
+/** The subset validateRouteBundle needs (items/skills/enemies/attributes). */
 export function toRegistries(s: ContentSet): Registries {
-  return { itemDb: s.items, skillDb: s.skills, enemyDb: s.enemies };
+  return { itemDb: s.items, skillDb: s.skills, enemyDb: s.enemies, attrDb: s.attributes };
 }

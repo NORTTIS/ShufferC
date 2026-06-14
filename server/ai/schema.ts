@@ -1,11 +1,9 @@
 import { z } from 'zod';
 import { ToolDef } from './provider';
 
-const StatKeySchema = z.enum(['str', 'dex', 'int', 'wis', 'cha', 'con']);
-
 const OutcomeSchema = z
   .object({
-    statDelta: z.record(StatKeySchema, z.number()).optional(),
+    statDelta: z.record(z.string(), z.number()).optional(),
     reputationDelta: z
       .object({
         hero: z.number().optional(),
@@ -21,7 +19,7 @@ const OutcomeSchema = z
 const ChoiceSchema = z.object({
   id: z.string(),
   text: z.string(),
-  skillCheck: z.object({ stat: StatKeySchema, dc: z.number() }).optional(),
+  skillCheck: z.object({ stat: z.string(), dc: z.number() }).optional(),
   outcome: OutcomeSchema.optional(),
   nextNodeId: z.string().optional(),
 });
