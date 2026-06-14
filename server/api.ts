@@ -314,9 +314,12 @@ export function createApp(session: GameSession, admin: AdminDeps, player: Player
     const bundle = await admin.routes.get(id);
     if (!bundle) throw new GameError(`Route ${id} not found`, 404);
     if (bundle.stagedContent) {
-      await flushStagedContent(admin.content, bundle.stagedContent);   // throws GameError(409) on id collision
-      delete bundle.stagedContent;
-      await admin.routes.create(bundle);   // upsert the cleared bundle (still draft) in both adapters
+      // Non-atomic: if flushStagedContent throws 409 mid-flush, already-committed entities
+      // cannot be rolled back. frameworkGen prevents this by collision-checking at gen time.
+      await flushStagedContent(admin.content, bundle.stagedContent);
+      const cleared = { ...bundle };
+      delete cleared.stagedContent;
+      await admin.routes.create(cleared);   // upsert the cleared bundle (still draft) in both adapters
     }
     await admin.routes.publish(id);
     res.status(204).end();
