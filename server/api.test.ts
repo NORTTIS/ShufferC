@@ -201,7 +201,7 @@ describe('Admin REST + AI route e2e', () => {
     const res = await request(a).post('/admin/routes/generate').set('Authorization', `Bearer ${t}`).send({ contextText: 'ctx', title: 'X' });
     expect(res.status).toBe(422);
     expect(Array.isArray(res.body.errors)).toBe(true);
-    expect(typeof res.body.toolCalls).toBe('number');
+    expect(res.body.toolCalls).toBe(0);
   });
 
   it('returns 503 when the provider is unavailable', async () => {
