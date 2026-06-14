@@ -98,11 +98,11 @@ export function createGeminiProvider(cfg: GeminiConfig): AIProvider {
       let count = 0;
       // Loop: model emits functionCall(s) → run handler → send functionResponse(s) → repeat.
       while (true) {
-        const calls = result.response.functionCalls?.() ?? [];
+        const calls = result.response.functionCalls() ?? [];
         if (!calls.length) return; // model produced no further calls — generation is done
+        if (count >= max) return;  // limit check before batch, never mid-batch
         const responses: unknown[] = [];
         for (const call of calls) {
-          if (count >= max) return;
           count++;
           const out = await handler({ name: call.name, args: call.args });
           responses.push({ functionResponse: { name: call.name, response: { result: out } } });
