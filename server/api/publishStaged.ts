@@ -7,7 +7,9 @@ import { GameError } from '../session';
 const ORDER: (keyof ContentSet)[] = ['attributes', 'effects', 'skills', 'items', 'enemies'];
 
 /** Commit a draft's staged content into the global content stores. Throws GameError(409)
- *  if any staged id already exists. Order matters so references resolve as they land. */
+ *  if any staged id already exists. Order matters so references resolve as they land.
+ *  Non-atomic: entities written before a collision are NOT rolled back. Callers must
+ *  ensure staged ids are genuinely new (frameworkGen collision-checks at generation time). */
 export async function flushStagedContent(stores: ContentStores, staged: ContentSet): Promise<void> {
   for (const kind of ORDER) {
     const store = stores[kind] as EntityStore<{ id: string }>;
